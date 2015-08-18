@@ -129,11 +129,11 @@ aa.add( 'die', 1,
 	// sizes and DOM
 	//------------------------------------------------------------------------------------------------------------------
 
-	var DRAW_OFFSET_Y = 100;
+	var HORIZON_Y = 100;
 	var SIZE = 400;
 	var NUM_CELLS = 8;
 	var CELL_SIZE = SIZE/NUM_CELLS;
-	var NUM_CELLS_DISPLAYED = NUM_CELLS*2+1;
+	var NUM_CELLS_DISPLAYED = NUM_CELLS*2+3;
 
 	var screenWidth;
 	var screenHeight;
@@ -141,18 +141,22 @@ aa.add( 'die', 1,
 
 	var bgCanvas = makeCanvas(SIZE, SIZE);
 	var bgCtx = getContext(bgCanvas);
-	var textureCanvas = makeCanvas(SIZE, 2*SIZE);
-    var textureCtx = getContext(textureCanvas);
+
+	var shadowCanvas = makeCanvas(SIZE, SIZE);
+    var shadowCtx = getContext(shadowCanvas);
+
+	var skyCanvas = makeCanvas(SIZE, 2*SIZE);
+    var skyCtx = getContext(skyCanvas);
 
 	window.onresize = onResize();
 	function onResize(){
 		screenWidth = win.innerWidth;
 		screenHeight = win.innerHeight;
 		bgCanvas.width = SIZE;
-		bgCanvas.height = SIZE+DRAW_OFFSET_Y;
+		bgCanvas.height = SIZE + HORIZON_Y;
 	}
 
-	body.appendChild(bgCanvas);
+
 
 	//------------------------------------------------------------------------------------------------------------------
 	// game logic
@@ -161,10 +165,12 @@ aa.add( 'die', 1,
 	var gameIsOver = false;
     var homeScreen = false;
     var progress = 0;	//expressed as a number of rows
-    var progressPerSec = 2;
+    var progressPerSec = 1;
     var checkBoard = {};
-    var topRowDisplayed = 0;
+    var topRowDisplayed = -1;
     var raf = true;
+
+    var playerPiece = null;
 
     //pieces
     var PLAYER = 'kp';
@@ -181,8 +187,11 @@ aa.add( 'die', 1,
 	//------------------------------------------------------------------------------------------------------------------
 
 	function init(){
+		body.appendChild(bgCanvas);
 		initSvg();
-		drawTexture();
+		initShadowCanvas();
+
+		drawSky();
 		initCheckBoard();
 
 		onResize();
@@ -191,17 +200,33 @@ aa.add( 'die', 1,
         document.onmousedown = function(){
         	raf = !raf;
 			console.log('debug toggle anim: ',raf);
+			if(raf){
+				lastTime = Date.now();
+				tic();
+			}
         };
 	}
 
 	function initCheckBoard(){
 		var p = makePiece;
+		var iCol, iRow;
 
-		p(PAWN, 5, 5);
-		for(var i=0; i<NUM_CELLS; i++){
-			p(PAWN,1,i);
+		p(PAWN, 0, 4);
+
+		for(iCol=0; iCol<NUM_CELLS; iCol++){
+			p(PAWN,1,iCol);
 		}
-		p(PAWN, 25, 5);
+
+		playerPiece = p(PLAYER, 5, 5);
+
+		/*
+		iCol = 0;
+		for(iRow=0; iRow<100; iRow++){
+			for(iCol=0; iCol<NUM_CELLS; iCol++){
+				p(PAWN, 10+iRow, iCol);
+			}
+		}
+		*/
 	}
 
 	function makePiece(shapeId, row, col){
@@ -215,10 +240,97 @@ aa.add( 'die', 1,
 			checkBoard[row] = {};
 		}
 		checkBoard[row][col] = piece;
+		return piece;
 	}
 
+	var KEY_LATENCY = 4;
+	var KEY_DONE = -10;
+	var moveX = 0;
+	var moveY = 0;
 	function processInput(){
+		if(topRowDisplayed <= 0){
+			return;
+		}
+		//We have to detect combinations for diagonal movement with some latency
+		var dx = 0;
+		var dy = 0;
+		if(keys.down == KEY_LATENCY || keys.down === 0){
+			dy = -1;
+		}
+		if(keys.up == KEY_LATENCY || keys.up === 0){
+			dy = 1;
+		}
+		if(keys.left == KEY_LATENCY || keys.left === 0){
+			dx = -1;
+		}
+		if(keys.right == KEY_LATENCY || keys.right === 0){
+			dx = 1;
+		}
+		if(dx && !dy){
+			if(keys.down >= 0 && keys.down <= KEY_LATENCY){
+				dy = -1;
+				keys.down = 0;
+			}
+			if(keys.up >= 0 && keys.up <= KEY_LATENCY){
+				dy = 1;
+				keys.up = 0;
+			}
+		}
+		if(dy && !dx){
+			if(keys.left >= 0 && keys.left <= KEY_LATENCY){
+				dx = -1;
+				keys.left = 0;
+			}
+			if(keys.right >= 0 && keys.right <= KEY_LATENCY){
+				dx = 1;
+				keys.right = 0;
+			}
+		}
 
+		if(dx || dy){
+			var oldCol = playerPiece.col;
+			var oldRow = playerPiece.row;
+
+			playerPiece.col += dx;
+			playerPiece.row += dy;
+			if(playerPiece.col<0){
+				playerPiece.col = 0;
+			}else if(playerPiece.col >= NUM_CELLS){
+				playerPiece.col = NUM_CELLS-1;
+			}
+			var rowMin = Math.floor(progress);
+			var rowMax = topRowDisplayed-2;
+			if(playerPiece.row < rowMin){
+				playerPiece.row = rowMin;
+			}else if(playerPiece.row >= rowMax){
+				playerPiece.row = rowMax;
+			}
+			//move piece on check board
+			delete checkBoard[oldRow][oldCol];
+			if(!checkBoard[playerPiece.row]){
+				checkBoard[playerPiece.row] = [];
+			}
+			checkBoard[playerPiece.row][playerPiece.col] = playerPiece;
+
+			if(dx){
+				keys.left = KEY_DONE;
+				keys.right = KEY_DONE;
+			}
+			if(dy){
+				keys.up = KEY_DONE;
+				keys.down = KEY_DONE;
+			}
+		}
+
+
+
+		for(var key in keys){
+			if(keys[key] >= 1){
+				keys[key]++;
+			}else{
+				keys[key]--;
+			}
+		}
 	}
 
 	function tic(){
@@ -284,8 +396,15 @@ aa.add( 'die', 1,
 					changes = true;
 					console.log('init row',i);
 					for(colIndex=0; colIndex<NUM_CELLS; colIndex++){
-						if(row[colIndex]){
-							addSvgShape(row[colIndex]);
+						//make sure elements can't overlap
+						var index = NUM_CELLS/2;
+						if(colIndex%2 === 0){
+							index += colIndex/2;
+						}else{
+							index -= (colIndex+1)/2;
+						}
+						if(row[index]){
+							addSvgShape(row[index]);
 						}
 					}
 				}
@@ -307,7 +426,7 @@ aa.add( 'die', 1,
 
 		//clear & fill
 		bgCtx.save();
-		bgCtx.translate(0,DRAW_OFFSET_Y);
+		bgCtx.translate(0,HORIZON_Y);
 		bgCtx.fillStyle = BG_COLOR;
 		bgCtx.beginPath();
 		bgCtx.rect(0,0,SIZE,SIZE);
@@ -349,9 +468,7 @@ aa.add( 'die', 1,
 		//bgCtx.stroke();
 		bgCtx.restore();
 
-		//draw shadow
-		bgCtx.drawImage(textureCanvas,0,0);
-
+		bgCtx.drawImage(skyCanvas,0,0);
 
 		//update pieces
 		var projectRes = {};
@@ -362,10 +479,24 @@ aa.add( 'die', 1,
 					if(row[colIndex]){
 						var piece = row[colIndex];
 						project( (piece.col+0.5)/NUM_CELLS, (piece.row-progress+0.5)/NUM_CELLS, projectRes);
+						var thresholdDown = -0.02;
+						var thresholdUp = 0.02;
+						var opacity = 1;
+						if(projectRes.y < thresholdDown){
+							opacity = 0;
+						}else if(projectRes.y < thresholdUp){
+							opacity = 1-(thresholdUp-projectRes.y)/(thresholdUp-thresholdDown);
+						}
+						piece.shape.style.opacity = opacity;
+
 						var x = projectRes.x * SIZE;
-						var y = projectRes.y * SIZE + DRAW_OFFSET_Y;
-						var scale = +projectRes.scaleX;
-						piece.shape.setAttributeNS(null,'transform', 'scale('+scale+') translate('+(x/scale)+','+(y/scale)+')');
+						var y = projectRes.y * SIZE;
+						var scale = projectRes.scaleX;
+						if(scale > 0){
+							y += HORIZON_Y;
+							//Note: svg transform origin is the root SVG element origin
+							piece.shape.setAttributeNS(null,'transform', 'scale('+scale+') translate('+(x/scale)+','+(y/scale)+')');
+						}
 					}
 				}
 			}
@@ -395,48 +526,93 @@ aa.add( 'die', 1,
 		return Math.sqrt( (1-((x*x)/(a*a)))*b*b );
 	}
 
-	function drawTexture(){
-		var ctx = textureCtx;
+	function initShadowCanvas(){
+		var ctx = shadowCtx;
+		//Top down shadow */
+		var grd = ctx.createLinearGradient(0,0,0,SIZE);
+		var c = 'rgba(10,20,25,';
+		var c2 = ')';
+		grd.addColorStop(0, c + 0 + c2);
+		grd.addColorStop(0.2, c + 0 + c2);
+		//grd.addColorStop(0.9,"rgba(0,0,0,0.3)");
+		grd.addColorStop(1, c + 0.5 + c2);
+
+		ctx.fillStyle = grd;
+		ctx.fillRect(0, 0, SIZE, SIZE);
+		ctx.restore();
+
+		shadowCanvas.style.top = HORIZON_Y+'px';
+		shadowCanvas.style.pointerEvents = 'none';
+		body.appendChild(shadowCanvas);
+	}
+	function drawSky(){
+		var ctx = skyCtx;
 		ctx.clearRect(0,0,SIZE,SIZE);
-		ctx.save();
 
 		ctx.save();
 		//Draw sky
 		ctx.fillStyle = '#FF8601';
 		ctx.beginPath();
-		ctx.rect(0, 0, SIZE, DRAW_OFFSET_Y);
+		ctx.rect(0, 0, SIZE, HORIZON_Y);
 		ctx.fill();
 		ctx.clip();
 		//Draw sun
 		ctx.fillStyle = '#FFE7CA';
-		var sunRadius = SIZE/6;
+		var sunRadius = SIZE/4;
 		ctx.beginPath();
-		ctx.arc(SIZE/2, DRAW_OFFSET_Y + 0.3*sunRadius, sunRadius, 0, PI, true);
+		ctx.arc(SIZE/2, HORIZON_Y + 0.3*sunRadius, sunRadius, 0, PI, true);
 		ctx.fill();
 		ctx.restore();
 		//Draw Mountains
 		ctx.beginPath();
 		ctx.fillStyle = 'rgb(10,20,25)';
-		var mountainWidth = 40;
-		var mountainHeight = 10;
+
+		var mountainMaxHeight = 40;
+        var points = [
+        	0, 0.7,
+        	0.1,0.3,
+        	0.2, 1,
+        	0.3, 0.5,
+        	0.35, 0.8,
+        	0.42, 0.5,
+        	0.55, 0.9,
+        	0.7, 0.45,
+        	0.8, 1.1,
+        	0.88, 0.4,
+        	1,0.8
+        ];
         var mountainX = 0;
-		ctx.moveTo(-mountainWidth,DRAW_OFFSET_Y);
-		var up = true;
-		while(mountainX < SIZE){
-			mountainX += (rand() + 0.5) * mountainWidth;
-			var plotY = (up ? (0.8 + rand() * 0.2) : (0.2 + rand() * 0.2)) * mountainHeight;
-			ctx.lineTo(mountainX, DRAW_OFFSET_Y - plotY);
-			up = !up;
+        for(var i=0; i<points.length; i+=2){
+        	var x = points[i] * SIZE;
+        	var y = HORIZON_Y - (mountainMaxHeight*points[i+1]);
+        	if(i===0){
+				ctx.moveTo(x, y);
+			}else{
+				ctx.lineTo(x, y);
+			}
 		}
-		ctx.lineTo(SIZE,DRAW_OFFSET_Y);
-		ctx.lineTo(0,DRAW_OFFSET_Y);
+		ctx.lineTo(SIZE,HORIZON_Y);
+		ctx.lineTo(0,HORIZON_Y);
 		ctx.fill();
 		ctx.restore();
 
+		ctx.save();
+		ctx.translate(0,HORIZON_Y);
+		var shadowSize = SIZE * 0.02;
+		var grd = ctx.createLinearGradient(0,0,0,shadowSize);
+		var c = 'rgba(10,20,25,';
+		var c2 = ')';
+		grd.addColorStop(0, c + 1 + c2);
+		grd.addColorStop(1, c + 0 + c2);
+
+		ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, SIZE, shadowSize);
+		ctx.restore();
+
 		/*
-		textureCtx.beginPath();
-		textureCtx.lineWidth = 1;
-		textureCtx.strokeStyle = STROKE_COLOR;
+		skyCtx.beginPath();
+		skyCtx.lineWidth = 1;
+		skyCtx.strokeStyle = STROKE_COLOR;
 		var randOffset = 4;
 		var y1, y2;
 		for(var i=-randOffset; i<SIZE+randOffset; i+=10){
@@ -444,34 +620,22 @@ aa.add( 'die', 1,
 			y2 = 1-Math.sin( (i/SIZE)*PI/2);
 			y1 = y1*SIZE + rand()*randOffset;
 			y2 = y2*SIZE +rand()*randOffset;
-            textureCtx.moveTo(0,y1);
-			textureCtx.lineTo(SIZE,y2);
+            skyCtx.moveTo(0,y1);
+			skyCtx.lineTo(SIZE,y2);
 		}
-		textureCtx.stroke();
-		document.body.appendChild(textureCanvas);
+		skyCtx.stroke();
+		document.body.appendChild(skyCanvas);
 		*/
 
 		/*
 		//Top down shadow
-		var grd = textureCtx.createLinearGradient(0,0,0,SIZE/2);
+		var grd = skyCtx.createLinearGradient(0,0,0,SIZE/2);
         grd.addColorStop(0,"rgba(0,0,0,0.6)");
 		grd.addColorStop(0.1,"rgba(0,0,0,0.3)");
 		grd.addColorStop(1,"rgba(0,0,0,0)");
 		*/
 
-		//Top down shadow */
-		var grd = ctx.createLinearGradient(0,DRAW_OFFSET_Y,0,SIZE);
-		var c = 'rgba(10,20,25,';
-		var c2 = ')';
-		grd.addColorStop(0, c + 0.9 + c2);
-		grd.addColorStop(0.01, c + 0 + c2);
-		grd.addColorStop(0.2, c + 0 + c2);
-		//grd.addColorStop(0.9,"rgba(0,0,0,0.3)");
-		grd.addColorStop(1, c + 0.5 + c2);
 
-		ctx.fillStyle = grd;
-		ctx.fillRect(0, DRAW_OFFSET_Y, SIZE, SIZE);
-		ctx.restore();
 	}
 
 	//------------------------------------------------------------------------------------------------------------------
@@ -479,7 +643,9 @@ aa.add( 'die', 1,
     //------------------------------------------------------------------------------------------------------------------
 
 	var svgMakeUse;
+	var svgElem;
 	var svgCache = {};
+
 	function addSvgShape(piece){
 		var shape;
 		if(!svgCache[piece.shapeId]){
@@ -487,10 +653,17 @@ aa.add( 'die', 1,
 		}
 		if(svgCache[piece.shapeId].length){
 			shape = svgCache[piece.shapeId].pop();
-			shape.style.display = 'block';
 		}else{
 			shape = svgMakeUse(piece.shapeId);
 		}
+		//Important: we assume element are always added to the top of the screen
+		//so they have to be prepended in order to be painted in the correct order
+		if(svgElem.firstChild){
+			svgElem.insertBefore(shape,svgElem.firstChild);
+		}else{
+			svgElem.appendChild(shape);
+		}
+
 		if(piece.shape){
 			throw new Error();
 		}
@@ -499,7 +672,7 @@ aa.add( 'die', 1,
 
 	function removeSvgShape(piece){
 		svgCache[piece.shapeId].push(piece.shape);
-		piece.shape.style.display = 'none';
+		svgElem.removeChild(piece.shape);
 		piece.shape = null;
 	}
 
@@ -508,9 +681,9 @@ aa.add( 'die', 1,
 		var xmlns = "http://www.w3.org/2000/svg";
 		var xlinkns = "http://www.w3.org/1999/xlink";
 		var boxWidth = SIZE;
-		var boxHeight = SIZE + DRAW_OFFSET_Y;
+		var boxHeight = SIZE + HORIZON_Y;
 
-		var svgElem = document.createElementNS (xmlns, "svg");
+		svgElem = document.createElementNS (xmlns, "svg");
 		svgElem.setAttribute("xmlns", xmlns);
 		svgElem.setAttributeNS(null, "viewBox", "0 0 " + boxWidth + " " + boxHeight);
 		svgElem.setAttributeNS(null, "width", boxWidth);
@@ -524,24 +697,43 @@ aa.add( 'die', 1,
 		//We also transform the shape positions so that the piece origin is [OX,OY]
 		var OX = 5;
 		var OY = 8;
-		var pawn = svgStyle(
+		var PIECE_FILL_COLOR = '#eee';
+		var PIECE_STROKE_COLOR = '#555';
+		//PAWN
+		svgStyle(
 			makeDef(PAWN,[
 				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[5,3],'L',[2,8]]),
 				makeCircle(5,3,2)
-			]), 'white', 'red', 0);
+			]), PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
+		);
+		//PLAYER
+		svgStyle(
+			makeDef(PLAYER,[
+				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[5,3],'L',[2,8]]),
+				makeCircle(5,3,2)
+			]), '#002', '#333', 0
+		);
 
 		function makeDef(id, shapes){
 			var def = document.createElementNS (xmlns, "g");
-		   def.setAttributeNS (null, "id", id);
+			def.setAttributeNS (null, "id", id);
 
+			def.appendChild(makeShadow());
 			for(var i=0; i<shapes.length; i++){
 				var shape = shapes[i];
 				shape.setAttributeNS(null,'x',-CELL_SIZE/2);
 				shape.setAttributeNS(null,'y',-CELL_SIZE);
 				def.appendChild(shape);
 			}
-			 defs.appendChild (def);
+
+			defs.appendChild (def);
 			return def;
+		}
+
+		function makeShadow(){
+			var shadow = makeEllipse(5, 8, 3.1, 1.8);
+			svgStyle(shadow,'rgba(0,0,0,0.2)','none');
+			return shadow;
 		}
 
 		function makeCircle(cx, cy, r){
@@ -552,6 +744,17 @@ aa.add( 'die', 1,
 				r: svgFloat(r)
 			});
 			return circle;
+		}
+
+		function makeEllipse(cx, cy, rx, ry){
+			var ellipse = document.createElementNS (xmlns, "ellipse");
+			svgAttrs(ellipse, {
+				cx: svgFloat(cx - OX),
+				cy: svgFloat(cy - OY),
+				rx: svgFloat(rx),
+				ry: svgFloat(ry)
+			});
+			return ellipse;
 		}
 
 		function makePath(list){
@@ -577,7 +780,6 @@ aa.add( 'die', 1,
 			svgAttrs(use, attrs);
 			use.setAttributeNS (xlinkns, "xlink:href", "#"+id);
 			use.setAttribute("xmlns:xlink", xlinkns);
-			svgElem.appendChild(use);
 			return use;
 		}
 
@@ -587,12 +789,14 @@ aa.add( 'die', 1,
 
 		function svgStyle(svgElem, fill, stroke, strokeWidth){
 			var attrs = {};
-			if(fill){
+			if(typeof fill != 'undefined'){
 				attrs.fill = fill;
 			}
-			if(stroke){
+			if(typeof stroke != 'undefined'){
 				attrs.stroke = stroke;
-				attrs.strokeWidth = strokeWidth || 1;
+			}
+			if(typeof strokeWidth != 'undefined'){
+				attrs.strokeWidth = strokeWidth;
 			}
 			svgAttrs(svgElem, attrs);
 			return svgElem;
@@ -692,7 +896,13 @@ aa.add( 'die', 1,
 		var c = e.keyCode;
 		if (e.charCode && !c) c = e.charCode;
 
-		keys[keyMap[c]] = isDown;
+		if(isDown){
+			keys[keyMap[c]] = 1;
+		}else{
+			if(keys[keyMap[c]] > 0){
+				keys[keyMap[c]] = 0;
+			}
+		}
 	}
 	document.onkeyup = function(e){
 		onkey(false, e);
