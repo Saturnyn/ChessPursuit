@@ -52,25 +52,25 @@ window.onload = function(){
 	// game logic
 	//------------------------------------------------------------------------------------------------------------------
 
+	var lastTime;
+    var MS_TO_S = 1/1000;
+
 	var gameIsOver = false;
     var homeScreen = false;
     var progress = 0;	//expressed as a number of rows
-    var progressPerSec = 1;
+    var progressPerSec = 1; //1
     var checkBoard = {};
     var topRowDisplayed = -1;
     var raf = true;
 
-    var playerPiece = null;
+    var player = null;
+	var playerAnimDuration = 0.08;
 
     //pieces
     var PLAYER = 'kp';
     var PAWN = 'p';
     var KING = 'k';
 
-
-	//input
-	var keys = {};
-	var mouse = {};
 
 	//------------------------------------------------------------------------------------------------------------------
 	// main loop
@@ -86,15 +86,6 @@ window.onload = function(){
 
 		onResize();
         tic();
-
-        document.onmousedown = function(){
-        	raf = !raf;
-			console.log('debug toggle anim: ',raf);
-			if(raf){
-				lastTime = Date.now();
-				tic();
-			}
-        };
 	}
 
 	function initCheckBoard(){
@@ -107,7 +98,7 @@ window.onload = function(){
 			p(PAWN,1,iCol);
 		}
 
-		playerPiece = p(PLAYER, 5, 5);
+		player = p(PLAYER, 5, 5);
 
 		/*
 		iCol = 0;
@@ -135,93 +126,158 @@ window.onload = function(){
 
 	var KEY_LATENCY = 4;
 	var KEY_DONE = -10;
-	var moveX = 0;
-	var moveY = 0;
+	//input
+	var keys = {
+		left:KEY_DONE,
+    	right:KEY_DONE,
+		up:KEY_DONE,
+		down:KEY_DONE
+	};
+	var keysBlockedUntilAllUp = false;
+	var mouse = {};
+	var mouseRow = -1;
+	var mouseCol = -1;
 	function processInput(){
+		if(keys.space==1){
+			raf = !raf;
+			console.log('debug toggle anim: ',raf);
+			if(raf){
+				lastTime = Date.now();
+				tic();
+			}
+		}
+
 		if(topRowDisplayed <= 0){
 			return;
 		}
-		//We have to detect combinations for diagonal movement with some latency
+		if(player.anim){
+			//can't during animation
+			return;
+		}
+
 		var dx = 0;
-		var dy = 0;
-		if(keys.down == KEY_LATENCY || keys.down === 0){
-			dy = -1;
-		}
-		if(keys.up == KEY_LATENCY || keys.up === 0){
-			dy = 1;
-		}
-		if(keys.left == KEY_LATENCY || keys.left === 0){
-			dx = -1;
-		}
-		if(keys.right == KEY_LATENCY || keys.right === 0){
-			dx = 1;
-		}
-		if(dx && !dy){
-			if(keys.down >= 0 && keys.down <= KEY_LATENCY){
+        var dy = 0;
+		if(!keysBlockedUntilAllUp){
+
+			//read keys that were just released or that were pressed just a few frames ago
+			//this leaves some time for a combination (ie: up+right)
+			if(keys.down == KEY_LATENCY || keys.down === 0){
 				dy = -1;
-				keys.down = 0;
 			}
-			if(keys.up >= 0 && keys.up <= KEY_LATENCY){
+			if(keys.up == KEY_LATENCY || keys.up === 0){
 				dy = 1;
-				keys.up = 0;
 			}
-		}
-		if(dy && !dx){
-			if(keys.left >= 0 && keys.left <= KEY_LATENCY){
+			if(keys.left == KEY_LATENCY || keys.left === 0){
 				dx = -1;
-				keys.left = 0;
 			}
-			if(keys.right >= 0 && keys.right <= KEY_LATENCY){
+			if(keys.right == KEY_LATENCY || keys.right === 0){
 				dx = 1;
-				keys.right = 0;
+			}
+
+			if(dx || dy){
+				//look for a combo: another key that was pressed during the latency
+				if(!dx){
+					if(keys.left <= KEY_LATENCY && keys.left > 0){
+						dx = -1;
+					}
+					if(keys.right <= KEY_LATENCY && keys.right > 0){
+						dx = 1;
+					}
+				}else{
+					if(keys.up <= KEY_LATENCY && keys.up > 0){
+						dy = 1;
+					}
+					if(keys.down <= KEY_LATENCY && keys.down > 0){
+						dy = -1;
+					}
+				}
+				console.log(keys,dx,dy);
+				movePlayer(player.row+dy, player.col+dx);
+
+				keysBlockedUntilAllUp = true;
 			}
 		}
 
-		if(dx || dy){
-			var oldCol = playerPiece.col;
-			var oldRow = playerPiece.row;
+		var keyName;
+		if(keysBlockedUntilAllUp){
+			var allUp = true;
+			for(keyName in keyBoolMap){
+				if(keyBoolMap[keyName]){
+					allUp = false;
+					break;
+				}
+			}
+			keysBlockedUntilAllUp = !allUp;
+		}
 
-			playerPiece.col += dx;
-			playerPiece.row += dy;
-			if(playerPiece.col<0){
-				playerPiece.col = 0;
-			}else if(playerPiece.col >= NUM_CELLS){
-				playerPiece.col = NUM_CELLS-1;
-			}
-			var rowMin = Math.floor(progress);
-			var rowMax = topRowDisplayed-2;
-			if(playerPiece.row < rowMin){
-				playerPiece.row = rowMin;
-			}else if(playerPiece.row >= rowMax){
-				playerPiece.row = rowMax;
-			}
-			//move piece on check board
-			delete checkBoard[oldRow][oldCol];
-			if(!checkBoard[playerPiece.row]){
-				checkBoard[playerPiece.row] = [];
-			}
-			checkBoard[playerPiece.row][playerPiece.col] = playerPiece;
-
-			if(dx){
-				keys.left = KEY_DONE;
-				keys.right = KEY_DONE;
-			}
-			if(dy){
-				keys.up = KEY_DONE;
-				keys.down = KEY_DONE;
+		//update key pressed counters
+		for(keyName in keys){
+			if(keys[keyName] >= 1){
+				keys[keyName]++;
+			}else if(keys[keyName]>KEY_DONE){
+				keys[keyName]--;
 			}
 		}
 
-
-
-		for(var key in keys){
-			if(keys[key] >= 1){
-				keys[key]++;
-			}else{
-				keys[key]--;
+		// no keyboard input => check mouse
+		if(!player.anim && mouse.x > 0 && mouse.x<SIZE && mouse.y > HORIZON_Y && mouse.y < SIZE + HORIZON_Y ){
+			dx = 0;
+			dy = 0;
+			var angle = Math.atan2(mouse.y-player.y,mouse.x-player.x)*180/PI;
+			var part = Math.floor(angle / 22.5); //[-8,7]
+			if(part <= -6 || part >= 5){
+				dx = -1;
+			}else if(part >= -3 && part <=2){
+				dx = 1;
 			}
+			if(part <= -2 && part >= -7){
+				dy = 1;
+			}else if(part >= 1 && part <=6){
+				dy = -1;
+			}
+
+			mouseRow = player.row + dy;
+			mouseCol = player.col + dx;
+			console.log('mouse part',part,'dx',dx,'dy',dy, Math.round(angle)+'deg');
+			if(mouse.left){
+				mouse.left = false;
+				movePlayer(mouseRow, mouseCol);
+			}
+		}else{
+			mouseCol = -1;
+			mouseRow = -1;
 		}
 	}
+
+	function movePlayer(row,col){
+		var oldCol = player.col;
+        var oldRow = player.row;
+
+		if(col<0){
+			col = 0;
+		}else if(col >= NUM_CELLS){
+			col = NUM_CELLS-1;
+		}
+		var rowMin = Math.floor(progress);
+		var rowMax = topRowDisplayed-2;
+		if(row < rowMin){
+			row = rowMin;
+		}else if(row >= rowMax){
+			row = rowMax;
+		}
+		if(col != oldCol || row != oldRow){
+			//move piece on check board
+			delete checkBoard[oldRow][oldCol];
+			player.oldCol = oldCol;
+			player.oldRow = oldRow;
+			player.anim = true;
+			player.animStartTime = Date.now();
+			player.col = col;
+			player.row = row;
+			checkBoard[row][col] = player;
+		}
+	}
+
 
 	function tic(){
 
@@ -254,13 +310,13 @@ window.onload = function(){
 		}
 	}
 
-
-	var lastTime;
 	function update(){
 		var t = Date.now();
 		if(lastTime){
-			progress += progressPerSec * (t-lastTime)/1000;
+			progress += progressPerSec * (t-lastTime) * MS_TO_S;
 		}
+
+		//update checkboard based on progress
 		var topRow = Math.floor(progress) + NUM_CELLS_DISPLAYED;
 		if(!lastTime || topRowDisplayed < topRow){
 			var row, colIndex, changes;
@@ -297,11 +353,16 @@ window.onload = function(){
 							addSvgShape(row[index]);
 						}
 					}
+				}else{
+					checkBoard[i] = [];
 				}
 			}
-			if(changes) console.log('updated checkboard, topRowDisplayed',topRowDisplayed,topRow,checkBoard);
+			//if(changes) console.log('updated checkboard, topRowDisplayed',topRowDisplayed,topRow,checkBoard);
 			topRowDisplayed = topRow;
 		}
+
+
+
 		lastTime = t;
 	}
 
@@ -309,6 +370,7 @@ window.onload = function(){
 	var CELL_COLOR_1 = '#D1DBBD';
 	var CELL_COLOR_2 = '#3E606F';
 	var STROKE_COLOR = '#D1DBBD';
+	var ROLLOVER_COLOR = '#794';
 
 	function render(){
 		clearCanvas(bgCtx);
@@ -341,15 +403,18 @@ window.onload = function(){
 				bgCtx.closePath();
 				bgCtx.lineWidth = 1;
                 //bgCtx.strokeStyle = STROKE_COLOR;
-                if(((i+j+progressIndex)%2 === 0)){
-               		bgCtx.fillStyle = CELL_COLOR_1;
-                	//bgCtx.fillStyle = pattern;
-                	bgCtx.fill();
+
+                if(mouseRow != -1 && mouseCol != -1 && i + progressIndex == mouseRow && j == mouseCol){
+                	//mouse over
+                	bgCtx.fillStyle = ROLLOVER_COLOR;
                 }else{
-                	bgCtx.fillStyle = CELL_COLOR_2;
-                	//bgCtx.fillStyle = pattern;
-                	bgCtx.fill();
-                }
+					if(((i+j+progressIndex)%2 === 0)){
+						bgCtx.fillStyle = CELL_COLOR_1;
+					}else{
+						bgCtx.fillStyle = CELL_COLOR_2;
+					}
+				}
+                bgCtx.fill();
 			}
 		}
 		//bgCtx.strokeStyle = 'green';
@@ -368,31 +433,61 @@ window.onload = function(){
 				for(var colIndex=0; colIndex<NUM_CELLS; colIndex++){
 					if(row[colIndex]){
 						var piece = row[colIndex];
-						project( (piece.col+0.5)/NUM_CELLS, (piece.row-progress+0.5)/NUM_CELLS, projectRes);
-						var thresholdDown = -0.02;
-						var thresholdUp = 0.02;
-						var opacity = 1;
-						if(projectRes.y < thresholdDown){
-							opacity = 0;
-						}else if(projectRes.y < thresholdUp){
-							opacity = 1-(thresholdUp-projectRes.y)/(thresholdUp-thresholdDown);
-						}
-						piece.shape.style.opacity = opacity;
-
-						var x = projectRes.x * SIZE;
-						var y = projectRes.y * SIZE;
-						var scale = projectRes.scaleX;
-						if(scale > 0){
-							y += HORIZON_Y;
-							//Note: svg transform origin is the root SVG element origin
-							piece.shape.setAttributeNS(null,'transform', 'scale('+scale+') translate('+(x/scale)+','+(y/scale)+')');
-						}
+						computeCellPos(piece.row, piece.col, piece);
+						updatePieceStyle(piece);
 					}
 				}
 			}
 		}
+
+		//update player anim
+		if(player.anim){
+			var animProgress = (MS_TO_S*(Date.now() - player.animStartTime))/playerAnimDuration;
+			if(animProgress<0 || animProgress>=1){
+				player.anim = false;
+			}else{
+				animProgress = Math.sin(animProgress * PI * 0.5); //Ease out
+
+				//compute old pos
+				computeCellPos(player.oldRow, player.oldCol, computeCellPosRes);
+				//interpolate
+				player.opacity = animProgress * player.opacity + (1-animProgress) * computeCellPosRes.opacity;
+				player.scale = animProgress * player.scale + (1-animProgress) * computeCellPosRes.scale;
+				player.x = animProgress * player.x + (1-animProgress) * computeCellPosRes.x;
+				player.y = animProgress * player.y + (1-animProgress) * computeCellPosRes.y;
+				updatePieceStyle(player);
+			}
+		}
 	}
 
+	var THRESHOLD_DOWN = -0.02;
+	var THRESHOLD_UP = 0.02;
+	var computeCellPosRes = {};
+	function computeCellPos(row, col, res){
+		project( (col+0.5)/NUM_CELLS, (row-progress+0.5)/NUM_CELLS, projectRes);
+		var thresholdDown = -0.02;
+		var thresholdUp = 0.02;
+		var opacity = 1;
+		if(projectRes.y < THRESHOLD_DOWN){
+			opacity = 0;
+		}else if(projectRes.y < THRESHOLD_UP){
+			opacity = 1-(thresholdUp-projectRes.y)/(THRESHOLD_UP-THRESHOLD_DOWN);
+		}
+		res.opacity = opacity;
+		res.x = projectRes.x * SIZE;
+		res.y = projectRes.y * SIZE + HORIZON_Y;
+		res.scale = projectRes.scaleX;
+	}
+
+	function updatePieceStyle(piece){
+		piece.shape.style.opacity = piece.opacity;
+		if(piece.scale > 0){
+			//Note: svg transform origin is the root SVG element origin
+			piece.shape.setAttributeNS(null,'transform', 'scale('+piece.scale+') translate('+(piece.x / piece.scale)+','+(piece.y / piece.scale)+')');
+		}
+	}
+
+	var projectRes = {};
 	function project(x, y, res){
 		res = res || {};
 
@@ -780,17 +875,30 @@ window.onload = function(){
 		27: "esc",
 		13: "Enter"
 	};
+	// keyName => isDown bool
+	var keyBoolMap = {};
 	//Set up key listener
 	function onkey(isDown, e) {
 		if (!e) e = window.e;
 		var c = e.keyCode;
 		if (e.charCode && !c) c = e.charCode;
 
-		if(isDown){
-			keys[keyMap[c]] = 1;
-		}else{
-			if(keys[keyMap[c]] > 0){
-				keys[keyMap[c]] = 0;
+		var keyName = keyMap[c];
+		if(keyName){
+			//only take events that represent an actual change
+			if(keyBoolMap[keyName] !== isDown){
+				keyBoolMap[keyName] = isDown;
+				if(isDown){
+					if(keys[keyName]<1){
+						console.log('keyDown',keyName);
+						keys[keyName] = 1;
+					}
+				}else{
+					if(keys[keyName] > 0){
+						console.log('keyUp',keyName);
+						keys[keyName] = 0;
+					}
+				}
 			}
 		}
 	}
