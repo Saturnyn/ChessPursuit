@@ -19,8 +19,9 @@ window.onload = function(){
 	// sizes and DOM
 	//------------------------------------------------------------------------------------------------------------------
 
-	var HORIZON_Y = 100;
-	var SIZE = 400;
+	var SCALE = 1;
+	var HORIZON_Y = 100 * SCALE;
+	var SIZE = 400 * SCALE;
 	var NUM_CELLS = 8;
 	var CELL_SIZE = SIZE/NUM_CELLS;
 	var NUM_CELLS_DISPLAYED = NUM_CELLS*2+3;
@@ -86,6 +87,29 @@ window.onload = function(){
 
 		onResize();
         tic();
+
+		/*
+		var p = [0,0.5,1,1.5,2];
+		var A_Y = A_S;
+		var B_Y = B_S;
+		var C_Y = C_S;
+		console.log(A_Y,B_Y,C_Y);
+
+		for(var i =0; i<p.length ; i++){
+			var x = p[i];
+			var y = quadraticEq(x,A_Y,B_Y,C_Y);
+			var res = [ reverseQuadraticEq(y,A_Y,B_Y,C_Y, true), reverseQuadraticEq(y,A_Y,B_Y,C_Y, false) ];
+			console.log(res[0]==x || res[1] == x, x,y,res);
+		}
+		*/
+		/*
+		var x = 0.35;
+		var y = 0.7;
+		project(x,y);
+		reverseProject(project.res.x, project.res.y);
+		console.log(x,project.res.x,reverseProject.res.x);
+		console.log(y,project.res.y,reverseProject.res.y);
+		*/
 	}
 
 	function initCheckBoard(){
@@ -100,14 +124,14 @@ window.onload = function(){
 
 		player = p(PLAYER, 5, 5);
 
-		/*
+
 		iCol = 0;
 		for(iRow=0; iRow<100; iRow++){
-			for(iCol=0; iCol<NUM_CELLS; iCol++){
+			for(iCol=0; iCol<1; iCol++){
 				p(PAWN, 10+iRow, iCol);
 			}
 		}
-		*/
+
 	}
 
 	function makePiece(shapeId, row, col){
@@ -221,6 +245,7 @@ window.onload = function(){
 
 		// no keyboard input => check mouse
 		if(!player.anim && mouse.x > 0 && mouse.x<SIZE && mouse.y > HORIZON_Y && mouse.y < SIZE + HORIZON_Y ){
+			/*
 			dx = 0;
 			dy = 0;
 			var angle = Math.atan2(mouse.y-player.y,mouse.x-player.x)*180/PI;
@@ -243,6 +268,33 @@ window.onload = function(){
 				mouse.left = false;
 				movePlayer(mouseRow, mouseCol);
 			}
+			*/
+			var mouseX = mouse.x/SIZE;
+			var mouseY = (mouse.y-HORIZON_Y)/SIZE;
+			reverseProject(mouseX, mouseY);
+			mouseCol = Math.floor(reverseProject.res.x * NUM_CELLS);
+			mouseRow = Math.floor(reverseProject.res.y * NUM_CELLS + progress);
+			dx = mouseCol - player.col;
+			dy = mouseRow - player.row;
+			if(dx > 1){
+				dx = 1;
+			}else if(dx < -1){
+				dx = -1;
+			}
+			if(dy > 1){
+				dy = 1;
+			}else if(dy < -1){
+				dy = -1;
+			}
+			mouseRow = player.row+dy;
+			mouseCol = player.col+dx;
+			if(mouse.left && (dx || dy)){
+				mouse.left = false;
+				movePlayer(mouseRow,mouseCol);
+			}
+
+			//console.log(mouseX,mouseY,reverseProject.res,mouseCol,mouseRow);
+
 		}else{
 			mouseCol = -1;
 			mouseRow = -1;
@@ -426,7 +478,6 @@ window.onload = function(){
 		bgCtx.drawImage(skyCanvas,0,0);
 
 		//update pieces
-		var projectRes = {};
 		for(var rowIndex=topRowDisplayed-NUM_CELLS_DISPLAYED-5; rowIndex<=topRowDisplayed; rowIndex++){
 			var row = checkBoard[rowIndex];
 			if(row){
@@ -464,19 +515,19 @@ window.onload = function(){
 	var THRESHOLD_UP = 0.02;
 	var computeCellPosRes = {};
 	function computeCellPos(row, col, res){
-		project( (col+0.5)/NUM_CELLS, (row-progress+0.5)/NUM_CELLS, projectRes);
+		project( (col+0.5)/NUM_CELLS, (row-progress+0.5)/NUM_CELLS);
 		var thresholdDown = -0.02;
 		var thresholdUp = 0.02;
 		var opacity = 1;
-		if(projectRes.y < THRESHOLD_DOWN){
+		if(project.res.y < THRESHOLD_DOWN){
 			opacity = 0;
-		}else if(projectRes.y < THRESHOLD_UP){
-			opacity = 1-(thresholdUp-projectRes.y)/(THRESHOLD_UP-THRESHOLD_DOWN);
+		}else if(project.res.y < THRESHOLD_UP){
+			opacity = 1-(thresholdUp-project.res.y)/(THRESHOLD_UP-THRESHOLD_DOWN);
 		}
 		res.opacity = opacity;
-		res.x = projectRes.x * SIZE;
-		res.y = projectRes.y * SIZE + HORIZON_Y;
-		res.scale = projectRes.scaleX;
+		res.x = project.res.x * SIZE;
+		res.y = project.res.y * SIZE + HORIZON_Y;
+		res.scale = project.res.scaleX;
 	}
 
 	function updatePieceStyle(piece){
@@ -487,20 +538,26 @@ window.onload = function(){
 		}
 	}
 
-	var projectRes = {};
+	// For y, projection of a [0,2] position in logical chessboard into a [1,0] position inside the canvas
+	// we want: 0->1 and 2->1. You don't want to know how I got those coeff. Don't ask.
+	// http://fooplot.com/#W3sidHlwZSI6MCwiZXEiOiItKDMvMTYpKngqeCsoMC8xNikqeCsxIiwiY29sb3IiOiIjMDAwMDAwIn0seyJ0eXBlIjoxMDAwLCJ3aW5kb3ciOlsiLTYuNiIsIjYuNCIsIi0zLjkyIiwiNC4wOCJdfV0-
+	var A_Y = 3/16;
+	var B_Y = -14/16;
+	var C_Y = 1;
+	//For scale, we roughly inverse the curve
+	var A_S = -2.5/16;
+	var B_S = 0/16;
+	var C_S = 1;
+
+	// [0,2] in logical chessboard => [0,1] in canvas coordinates
+	project.res = {};
 	function project(x, y, res){
-		res = res || {};
+		res = res || project.res;
 
-		var t = 0.5*y; // t in [0,1]
-        //for width, interpolate between y=1-0.25x and y=2.5-2*x + 0.125*x [0,2]=>[0,1]
-      	var width = ellipseEq(t + 0.2, 1.4, 1.0);
-		//for y, interpolate between y=x and y=0.75 + 0.125*x [0,2]=>[0,1]
-        y = (1-t)*t + t*(0.75+0.25*t);
-
-		res.x = (1-width)/2 + x*width;
-		res.y = 1-y;
-		res.scaleX = width;
-		res.scaleY = width;
+		res.y = quadraticEq(y, A_Y, B_Y, C_Y);
+		res.scaleX = quadraticEq(y, A_S, B_S, C_S);
+		res.scaleY = res.scaleX;
+		res.x = (1-res.scaleX)/2 + x*res.scaleX;
 
 		return res;
 	}
@@ -510,6 +567,28 @@ window.onload = function(){
 		// y = sqrt( (1-x²/a²)*b² )
 		return Math.sqrt( (1-((x*x)/(a*a)))*b*b );
 	}
+
+	reverseProject.res = {};
+	function reverseProject(x, y, res){
+		res = res || reverseProject.res;
+		res.y = reverseQuadraticEq(y, A_Y, B_Y, C_Y, false);
+		var scale = quadraticEq(res.y, A_S, B_S, C_S);
+		res.x = (x - (1-scale)/2)/scale;
+		return res;
+	}
+
+	function quadraticEq(x, a, b, c){
+		return a*x*x + b*x + c;
+	}
+
+	function reverseQuadraticEq(y, a, b, c, pos){
+		if(pos){
+			return (-b + Math.sqrt(b*b - 4*a*(c-y)))/(2*a);
+		}else{
+			return (-b - Math.sqrt(b*b - 4*a*(c-y)))/(2*a);
+		}
+	}
+
 
 	function initShadowCanvas(){
 		var ctx = shadowCtx;
