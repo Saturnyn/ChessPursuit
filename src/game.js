@@ -63,9 +63,10 @@ window.onload = function(){
     var checkBoard = {};
     var topRowDisplayed = -1;
     var raf = true;
+    var removedPieces = [];
 
     var player = null;
-	var playerAnimDuration = 0.08;
+	var playerAnimDuration = 0.05;
 
     //pieces
     var PLAYER = 'kp';
@@ -116,18 +117,22 @@ window.onload = function(){
 		var p = makePiece;
 		var iCol, iRow;
 
+		/*
 		p(PAWN, 0, 4);
 
 		for(iCol=0; iCol<NUM_CELLS; iCol++){
 			p(PAWN,1,iCol);
 		}
+		*/
 
 		player = p(PLAYER, 5, 5);
+		p(PAWN, 6, 4);
+
 
 
 		iCol = 0;
 		for(iRow=0; iRow<100; iRow++){
-			for(iCol=0; iCol<1; iCol++){
+			for(iCol=0; iCol<NUM_CELLS; iCol++){
 				p(PAWN, 10+iRow, iCol);
 			}
 		}
@@ -148,14 +153,14 @@ window.onload = function(){
 		return piece;
 	}
 
-	var KEY_LATENCY = 4;
-	var KEY_DONE = -10;
 	//input
+	var KEY_LATENCY = 6;
+	var KEY_DONE = -1;
 	var keys = {
-		left:KEY_DONE,
-    	right:KEY_DONE,
-		up:KEY_DONE,
-		down:KEY_DONE
+		left:-1,
+    	right:-1,
+		up:-1,
+		down:-1
 	};
 	var keysBlockedUntilAllUp = false;
 	var mouse = {};
@@ -215,7 +220,7 @@ window.onload = function(){
 						dy = -1;
 					}
 				}
-				console.log(keys,dx,dy);
+				//console.log(keys,dx,dy);
 				movePlayer(player.row+dy, player.col+dx);
 
 				keysBlockedUntilAllUp = true;
@@ -318,6 +323,10 @@ window.onload = function(){
 			row = rowMax;
 		}
 		if(col != oldCol || row != oldRow){
+			if(checkBoard[row][col]){
+				//take the piece
+				destroyPiece(checkBoard[row][col]);
+			}
 			//move piece on check board
 			delete checkBoard[oldRow][oldCol];
 			player.oldCol = oldCol;
@@ -328,6 +337,12 @@ window.onload = function(){
 			player.row = row;
 			checkBoard[row][col] = player;
 		}
+	}
+
+	function destroyPiece(piece){
+		removedPieces.push(piece);
+		piece.removedTime = Date.now();
+		piece.justRemoved = true;
 	}
 
 
@@ -377,7 +392,7 @@ window.onload = function(){
 				row = checkBoard[i];
 				if(row){
 					changes = true;
-					console.log('removing row',i);
+					//console.log('removing row',i);
 					for(colIndex=0; colIndex<NUM_CELLS; colIndex++){
 						if(row[colIndex]){
 							removeSvgShape(row[colIndex]);
@@ -392,7 +407,7 @@ window.onload = function(){
 				row = checkBoard[i];
 				if(row){
 					changes = true;
-					console.log('init row',i);
+					//console.log('init row',i);
 					for(colIndex=0; colIndex<NUM_CELLS; colIndex++){
 						//make sure elements can't overlap
 						var index = NUM_CELLS/2;
@@ -440,8 +455,9 @@ window.onload = function(){
 		var progressIndex = Math.floor(progress);
 		var di = -(progress - Math.floor(progress));
 		var p1 = {}, p2 = {}, p3 = {}, p4 = {};
-		for(var i=-1; i<NUM_CELLS_DISPLAYED; i++){
-			for(var j=0; j<NUM_CELLS; j++){
+		var i,j,len;
+		for(i=-1; i<NUM_CELLS_DISPLAYED; i++){
+			for(j=0; j<NUM_CELLS; j++){
 				project((j)/NUM_CELLS, (i+di)/NUM_CELLS, p1);
 				project((j)/NUM_CELLS, (i+1+di)/NUM_CELLS, p4);
 				project((j+1)/NUM_CELLS, (i+1+di)/NUM_CELLS, p3);
@@ -477,20 +493,6 @@ window.onload = function(){
 
 		bgCtx.drawImage(skyCanvas,0,0);
 
-		//update pieces
-		for(var rowIndex=topRowDisplayed-NUM_CELLS_DISPLAYED-5; rowIndex<=topRowDisplayed; rowIndex++){
-			var row = checkBoard[rowIndex];
-			if(row){
-				for(var colIndex=0; colIndex<NUM_CELLS; colIndex++){
-					if(row[colIndex]){
-						var piece = row[colIndex];
-						computeCellPos(piece.row, piece.col, piece);
-						updatePieceStyle(piece);
-					}
-				}
-			}
-		}
-
 		//update player anim
 		if(player.anim){
 			var animProgress = (MS_TO_S*(Date.now() - player.animStartTime))/playerAnimDuration;
@@ -509,6 +511,64 @@ window.onload = function(){
 				updatePieceStyle(player);
 			}
 		}
+
+		//update pieces
+		var pieceAfterPlayer;
+		for(var rowIndex=topRowDisplayed-NUM_CELLS_DISPLAYED-5; rowIndex<=topRowDisplayed; rowIndex++){
+			var row = checkBoard[rowIndex];
+			if(row){
+				for(var colIndex=0; colIndex<NUM_CELLS; colIndex++){
+					if(row[colIndex]){
+						var piece = row[colIndex];
+						computeCellPos(piece.row, piece.col, piece);
+						updatePieceStyle(piece);
+						if(piece.y > player.y && (!pieceAfterPlayer || pieceAfterPlayer.y>piece.y)){
+							pieceAfterPlayer = piece;
+						}
+					}
+				}
+			}
+		}
+		if(pieceAfterPlayer){
+			//adjust player z-index
+			svgElem.insertBefore(player.shape, pieceAfterPlayer.shape);
+		}
+
+
+
+
+		//update removedPieces
+		var time = Date.now();
+		for(i=0,len=removedPieces.length; i<len; i++){
+			var removedPiece = removedPieces[i];
+			var removedPieceProgress = (time - removedPiece.removedTime) / 1000;
+
+			if(removedPieceProgress > 1){
+				//console.log('removedPieces',removedPieces);
+				removeSvgShape(removedPiece);
+				removedPieces[i] = removedPieces[len-1];
+				len--;
+				i--;
+				removedPieces = removedPieces.slice(0,len);
+				//console.log('============>',removedPieces);
+			}else{
+				if(removedPiece.justRemoved){
+					removedPiece.justRemoved = false;
+					removedPiece.removedX = removedPiece.x;
+					removedPiece.removedY = removedPiece.y;
+				}
+				if(removedPiece.x < SIZE*0.5){
+					removedPiece.x = removedPiece.removedX - removedPieceProgress * SIZE;
+				}else{
+					removedPiece.x = removedPiece.removedX + removedPieceProgress * SIZE;
+				}
+				removedPiece.y = removedPiece.removedY - Math.sin(removedPieceProgress*PI) * SIZE * 0.4;
+				updatePieceStyle(removedPiece);
+
+				//console.log(removedPiece.x, removedPiece.y, removedPieceProgress);
+			}
+		}
+
 	}
 
 	var THRESHOLD_DOWN = -0.02;
