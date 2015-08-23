@@ -163,6 +163,7 @@ aa.add( 'die', 1,
 	// game logic
 	//------------------------------------------------------------------------------------------------------------------
 
+	var now = 0; //Date.now(), set on update
 	var lastTime;
     var MS_TO_S = 1/1000;
 
@@ -177,12 +178,21 @@ aa.add( 'die', 1,
 
     var player = null;
 	var playerAnimDuration = 0.05;
+	var playerInvalidDuration = 0.5;
+
+	var checkText;
 
     //pieces
-    var PLAYER = 'kp';
+    var PLAYER = 'P';
     var PAWN = 'p';
-    var KING = 'k';
-
+    var KING = 'K';
+    var ROOK = 'r';
+    var BISHOP = 'b';
+    var KNIGHT = 'k';
+    //filters
+    var ENEMY = 'e';
+    var CHECK_TEXT = 'ct';
+	var CHECK_GRADIENT = 'cg';
 
 	//------------------------------------------------------------------------------------------------------------------
 	// main loop
@@ -224,35 +234,161 @@ aa.add( 'die', 1,
 	}
 
 	function initCheckBoard(){
-		var p = makePiece;
-		var iCol, iRow;
+		var currentBlockIndex = 0;
+        var startBlockIndex = 6;
+
+		//0 TODO: intro
+		block(
+			'',
+			'',
+			'',
+			'  krb',
+			'',
+			'',
+			'',
+			'    p'
+		);
+
+		//1 scattered pawns
+		block(
+			'  pppp',
+			'  pppp',
+			'',
+			'  p',
+			'',
+			'     p',
+			'',
+			''
+		);
+
+		//2 pawn rows
+		block(
+			'',
+			'pppppp',
+			'',
+			'  pppppp',
+			'',
+			'pppppp',
+			'',
+			''
+		);
+
+		//3 triangle
+		block(
+			'',
+			'pp   ppp',
+			'  p p',
+			'   p',
+			'',
+			'',
+			'',
+			''
+		);
+
+		//4 sawtooth
+		block(
+			'',
+			'   pp',
+			'p p  p p',
+			' p    p',
+			'',
+			'',
+			'',
+			''
+		);
+
+		//5 wedges
+		block(
+			'',
+			'     ppp',
+			'      p',
+			'ppp',
+			' p   ppp',
+			'      p',
+			'',
+			''
+		);
+
+		//6
+		block(
+			'   p',
+			'   r',
+			'',
+			'   p',
+			'   p',
+			'',
+			'',
+			''
+		);
 
 		/*
-		p(PAWN, 0, 4);
 
-		for(iCol=0; iCol<NUM_CELLS; iCol++){
-			p(PAWN,1,iCol);
+        //first rook
+        currentBlockIndex++;
+       	p(PAWN,3,3);
+       	p(ROOK,6,3);
+		*/
+
+		//Add player
+		player = makePiece(PLAYER, 5 + progress, 5);
+
+
+		/*
+		//Create a piece, row / col can be an array of two values to set lines
+		function piece(type, row, col){
+			var rowFrom = row;
+			var rowTo = row;
+			var colFrom = col;
+			var colTo = col;
+
+			if(typeof row != 'number'){
+				rowFrom = row[0];
+				rowTo = row[1];
+			}
+			if(typeof col != 'number'){
+				colFrom = col[0];
+				colTo = col[1];
+			}
+			var lastPiece = null;
+			for(var i=rowFrom; i<=rowTo; i++){
+				for(var j=colFrom; j<=colTo; j++){
+					lastPiece = makePiece(type,i + currentBlockIndex * NUM_CELLS,j);
+				}
+			}
+			return lastPiece;
 		}
 		*/
 
-		player = p(PLAYER, 5, 5);
-		p(PAWN, 6, 4);
+		//Create a block of 8/8
+		function block(){
+			if(currentBlockIndex >= startBlockIndex){
+				var blockIndex = startBlockIndex ? (currentBlockIndex - startBlockIndex +1) : 0;
+				var args = Array.prototype.slice.call(arguments);
+				if(args.length != NUM_CELLS) throw new Error();
+				for(var i=args.length-1; i>=0; i--){
+					var row = args[i];
+					if(row.length > NUM_CELLS) throw new Error();
+					var rowIndex = (blockIndex+1)*NUM_CELLS - i -1;
+					if(row !== ''){
+						for(var j=0; j<row.length; j++){
+							var char = row.charAt(j);
+							if(char!==' ' && char!=='-'){
+								makePiece(char, rowIndex, j);
+							}
+						}
 
-
-
-		iCol = 0;
-		for(iRow=0; iRow<100; iRow++){
-			for(iCol=0; iCol<NUM_CELLS; iCol++){
-				p(PAWN, 10+iRow, iCol);
+					}
+				}
 			}
+			currentBlockIndex++;
 		}
 
 	}
 
-	function makePiece(shapeId, row, col){
+	function makePiece(type, row, col){
 		var piece = {
 			shape: null,
-			shapeId: shapeId,
+			type: type,
 			row: row,
 			col: col
 		};
@@ -277,15 +413,6 @@ aa.add( 'die', 1,
 	var mouseRow = -1;
 	var mouseCol = -1;
 	function processInput(){
-		if(keys.space==1){
-			raf = !raf;
-			console.log('debug toggle anim: ',raf);
-			if(raf){
-				lastTime = Date.now();
-				tic();
-			}
-		}
-
 		if(topRowDisplayed <= 0){
 			return;
 		}
@@ -433,25 +560,105 @@ aa.add( 'die', 1,
 			row = rowMax;
 		}
 		if(col != oldCol || row != oldRow){
-			if(checkBoard[row][col]){
-				//take the piece
-				destroyPiece(checkBoard[row][col]);
+			//can cell be taken ?
+			var enemyPiece = getEnemyPiece(row,col);
+
+			if(enemyPiece){
+				//invalid position
+				player.invalid = true;
+                player.invalidCol = col;
+                player.invalidRow = row;
+                player.enemyPiece = enemyPiece;
+				col = oldCol;
+				row = oldRow;
+			}else{
+				player.invalid = false;
+				if(checkBoard[row][col]){
+					//take the piece
+					destroyPiece(checkBoard[row][col]);
+				}
+				//move piece on check board
+				delete checkBoard[oldRow][oldCol];
+				checkBoard[row][col] = player;
 			}
-			//move piece on check board
-			delete checkBoard[oldRow][oldCol];
 			player.oldCol = oldCol;
 			player.oldRow = oldRow;
 			player.anim = true;
-			player.animStartTime = Date.now();
+			player.animStartTime = now;
 			player.col = col;
 			player.row = row;
-			checkBoard[row][col] = player;
+		}
+	}
+
+	function getEnemyPiece(row,col){
+		//pawns
+		var enemyPiece =
+			getPieceAt(row+1,col-1,PAWN) ||
+			getPieceAt(row+1,col+1,PAWN);
+		if(enemyPiece){
+			return enemyPiece;
+		}
+		//rook
+		var i,j,piece;
+		//Check left
+		for(j=col-1; j>=0 ; j--){
+			piece = getPieceAt(row,j);
+			if(piece){
+				if(piece.type == ROOK){
+					return piece;
+				}else{
+					break;
+				}
+			}
+		}
+		//Check right
+		for(j=row+1; j<=NUM_CELLS ; j++){
+			piece = getPieceAt(row,j);
+			if(piece){
+				if(piece.type == ROOK){
+					return piece;
+				}else{
+					break;
+				}
+			}
+		}
+		//Check down
+		for(i=row+1; i<=row+NUM_CELLS ; i++){
+			piece = getPieceAt(i,col);
+			if(piece){
+				if(piece.type == ROOK){
+					return piece;
+				}else{
+					break;
+				}
+			}
+		}
+		//Check up
+		for(i=row-1; i>=row-NUM_CELLS ; i--){
+			piece = getPieceAt(i,col);
+			if(piece){
+				if(piece.type == ROOK){
+					return piece;
+				}else{
+					break;
+				}
+			}
+		}
+	}
+
+	function getPieceAt(row, col,type){
+		var rowArray = checkBoard[row];
+		if(rowArray){
+			var piece = rowArray[col];
+			if(piece && (!type || piece.type == type)){
+				return checkBoard[row][col];
+			}
 		}
 	}
 
 	function destroyPiece(piece){
 		removedPieces.push(piece);
-		piece.removedTime = Date.now();
+		piece.removedTime = now;
 		piece.justRemoved = true;
 	}
 
@@ -474,9 +681,9 @@ aa.add( 'die', 1,
 				processInput();
 				update();
 
-				//var t = Date.now();
+				//var t = now;
 				render();
-				//console.log('renderTime', Date.now()-t);
+				//console.log('renderTime', now-t);
 			}
 		}
 
@@ -488,9 +695,13 @@ aa.add( 'die', 1,
 	}
 
 	function update(){
-		var t = Date.now();
+		now = Date.now();
 		if(lastTime){
-			progress += progressPerSec * (t-lastTime) * MS_TO_S;
+			progress += progressPerSec * (now-lastTime) * MS_TO_S;
+		}
+
+		if(player.row < progress - 0.5){
+			movePlayer(player.row+1, player.col);
 		}
 
 		//update checkboard based on progress
@@ -540,7 +751,7 @@ aa.add( 'die', 1,
 
 
 
-		lastTime = t;
+		lastTime = now;
 	}
 
 	var BG_COLOR = '#193441';
@@ -548,10 +759,132 @@ aa.add( 'die', 1,
 	var CELL_COLOR_2 = '#3E606F';
 	var STROKE_COLOR = '#D1DBBD';
 	var ROLLOVER_COLOR = '#794';
+	var PIECE_FILL_COLOR = '#eee';
+    var PIECE_STROKE_COLOR = '#555';
+    var INVALID_CELL_COLOR_RGB = '255,0,0';
 
 	function render(){
-		clearCanvas(bgCtx);
+		// SVG ---
+		 
+		//update pieces
+		var pieceAfterPlayer;
+		for(var rowIndex=topRowDisplayed-NUM_CELLS_DISPLAYED-5; rowIndex<=topRowDisplayed; rowIndex++){
+			var row = checkBoard[rowIndex];
+			if(row){
+				for(var colIndex=0; colIndex<NUM_CELLS; colIndex++){
+					if(row[colIndex]){
+						var piece = row[colIndex];
+						//if(piece != player){
+							computeCellPos(piece.row, piece.col, piece);
+							updatePieceStyle(piece);
+							if(piece.y > player.y && (!pieceAfterPlayer || pieceAfterPlayer.y > piece.y)){
+								pieceAfterPlayer = piece;
+							}
+						//}
+					}
+				}
+			}
+		}
+		if(pieceAfterPlayer){
+			//adjust player z-index
+			svgElem.insertBefore(player.shape, pieceAfterPlayer.shape);
+		}
 
+		//update player anim
+		var playerAnimProgress;
+		if(player.anim){
+			if(!player.invalid){
+				playerAnimProgress = (MS_TO_S*(now - player.animStartTime))/playerAnimDuration;
+			}else{
+				playerAnimProgress = (MS_TO_S*(now - player.animStartTime))/playerInvalidDuration;
+			}
+			if(playerAnimProgress<0 || playerAnimProgress>=1){
+				player.anim = false;
+				if(player.invalid && player.enemyPiece){
+					player.enemyPiece.shape.style.filter = 'none';
+				}
+				player.invalid = false;
+			}else{
+				playerAnimProgress = Math.sin(playerAnimProgress * PI * 0.5); //Ease out
+				if(player.invalid){
+					computeCellPos(player.row, player.col);
+					var shakeAmplitude = 0.4 * (playerAnimProgress < 0.5 ? playerAnimProgress : 1-playerAnimProgress)*CELL_SIZE;
+					var shake = Math.sin(6*playerAnimProgress*PI) * shakeAmplitude;
+					player.x += shake;
+					updatePieceStyle(player);
+					//color enemy piece
+					player.enemyPiece.shape.style.filter = 'url(#'+ENEMY+')';
+				}else{
+					//compute old pos
+					computeCellPos(player.oldRow, player.oldCol);
+					//interpolate
+					player.opacity = playerAnimProgress * player.opacity + (1-playerAnimProgress) * computeCellPos.res.opacity;
+					player.scale = playerAnimProgress * player.scale + (1-playerAnimProgress) * computeCellPos.res.scale;
+					player.x = playerAnimProgress * player.x + (1-playerAnimProgress) * computeCellPos.res.x;
+					player.y = playerAnimProgress * player.y + (1-playerAnimProgress) * computeCellPos.res.y;
+					updatePieceStyle(player);
+				}
+			}
+		}
+
+		//update removedPieces
+		for(i=0,len=removedPieces.length; i<len; i++){
+			var removedPiece = removedPieces[i];
+			var removedPieceProgress = (now - removedPiece.removedTime) / 1000;
+
+			if(removedPieceProgress > 1){
+				//console.log('removedPieces',removedPieces);
+				removeSvgShape(removedPiece);
+				removedPieces[i] = removedPieces[len-1];
+				len--;
+				i--;
+				removedPieces = removedPieces.slice(0,len);
+				//console.log('============>',removedPieces);
+			}else{
+				if(removedPiece.justRemoved){
+					removedPiece.justRemoved = false;
+					removedPiece.removedX = removedPiece.x;
+					removedPiece.removedY = removedPiece.y;
+				}
+				if(removedPiece.x < SIZE*0.5){
+					removedPiece.x = removedPiece.removedX - removedPieceProgress * SIZE;
+				}else{
+					removedPiece.x = removedPiece.removedX + removedPieceProgress * SIZE;
+				}
+				removedPiece.y = removedPiece.removedY - Math.sin(removedPieceProgress*PI) * SIZE * 0.4;
+				updatePieceStyle(removedPiece);
+
+				//console.log(removedPiece.x, removedPiece.y, removedPieceProgress);
+			}
+		}
+
+		//Check text
+		if(player.anim && player.invalid){
+			if(!checkText){
+				checkText = {
+					onTop: true,
+					type: CHECK_TEXT
+				};
+			}
+			if(!checkText.shape){
+				addSvgShape(checkText);
+				checkText.row = player.invalidRow;
+				checkText.col = player.invalidCol;
+			}
+			computeCellPos(player.invalidRow, player.invalidCol, checkText);
+			checkText.scale = 1;
+			checkText.y -= playerAnimProgress * checkText.scale * CELL_SIZE * 0.2;
+			checkText.opacity = playerAnimProgress < 0.8 ? 1 : (1-(playerAnimProgress-0.8)/(1-0.8));
+			updatePieceStyle(checkText);
+		}else if(checkText && checkText.shape){
+			removeSvgShape(checkText);
+		}
+
+
+
+		// CANVAS -----
+
+		clearCanvas(bgCtx);
 
 		//clear & fill
 		bgCtx.save();
@@ -580,111 +913,52 @@ aa.add( 'die', 1,
 				bgCtx.lineTo(p4.x * SIZE, p4.y * SIZE);
 				bgCtx.closePath();
 				bgCtx.lineWidth = 1;
-                //bgCtx.strokeStyle = STROKE_COLOR;
+				//bgCtx.strokeStyle = STROKE_COLOR;
 
-                if(mouseRow != -1 && mouseCol != -1 && i + progressIndex == mouseRow && j == mouseCol){
-                	//mouse over
-                	bgCtx.fillStyle = ROLLOVER_COLOR;
-                }else{
+				if(mouseRow != -1 && mouseCol != -1 && i + progressIndex == mouseRow && j == mouseCol){
+					//mouse over
+					bgCtx.fillStyle = ROLLOVER_COLOR;
+				}else{
 					if(((i+j+progressIndex)%2 === 0)){
 						bgCtx.fillStyle = CELL_COLOR_1;
 					}else{
 						bgCtx.fillStyle = CELL_COLOR_2;
 					}
 				}
-                bgCtx.fill();
+				bgCtx.fill();
+
+				if(player.invalid && player.invalidCol == j && player.invalidRow == i + progressIndex){
+					//invalid tile
+					var invalidOpacity = 1.5 * (playerAnimProgress < 0.5 ? playerAnimProgress : 1-playerAnimProgress);
+					bgCtx.fillStyle = 'rgba('+INVALID_CELL_COLOR_RGB+','+invalidOpacity+')';
+					bgCtx.fill();
+				}
+			}
+			//Draw checkboard line
+			if( (i+progressIndex) % NUM_CELLS === 0){
+				project(0, (i+di)/NUM_CELLS, p1);
+            	project(1, (i+di)/NUM_CELLS, p2);
+            	bgCtx.beginPath();
+            	bgCtx.moveTo(p1.x*SIZE,p1.y*SIZE);
+            	bgCtx.lineTo(p2.x*SIZE,p2.y*SIZE);
+            	bgCtx.closePath();
+            	bgCtx.strokeStyle = '#333';
+                bgCtx.strokeWidth = '1';
+            	bgCtx.stroke();
 			}
 		}
-		//bgCtx.strokeStyle = 'green';
-		//bgCtx.beginPath();
-		//bgCtx.rect(0,0,SIZE,SIZE);
-		//bgCtx.stroke();
+
+
+		//Draw sky
 		bgCtx.restore();
-
-		bgCtx.drawImage(skyCanvas,0,0);
-
-		//update player anim
-		if(player.anim){
-			var animProgress = (MS_TO_S*(Date.now() - player.animStartTime))/playerAnimDuration;
-			if(animProgress<0 || animProgress>=1){
-				player.anim = false;
-			}else{
-				animProgress = Math.sin(animProgress * PI * 0.5); //Ease out
-
-				//compute old pos
-				computeCellPos(player.oldRow, player.oldCol, computeCellPosRes);
-				//interpolate
-				player.opacity = animProgress * player.opacity + (1-animProgress) * computeCellPosRes.opacity;
-				player.scale = animProgress * player.scale + (1-animProgress) * computeCellPosRes.scale;
-				player.x = animProgress * player.x + (1-animProgress) * computeCellPosRes.x;
-				player.y = animProgress * player.y + (1-animProgress) * computeCellPosRes.y;
-				updatePieceStyle(player);
-			}
-		}
-
-		//update pieces
-		var pieceAfterPlayer;
-		for(var rowIndex=topRowDisplayed-NUM_CELLS_DISPLAYED-5; rowIndex<=topRowDisplayed; rowIndex++){
-			var row = checkBoard[rowIndex];
-			if(row){
-				for(var colIndex=0; colIndex<NUM_CELLS; colIndex++){
-					if(row[colIndex]){
-						var piece = row[colIndex];
-						computeCellPos(piece.row, piece.col, piece);
-						updatePieceStyle(piece);
-						if(piece.y > player.y && (!pieceAfterPlayer || pieceAfterPlayer.y>piece.y)){
-							pieceAfterPlayer = piece;
-						}
-					}
-				}
-			}
-		}
-		if(pieceAfterPlayer){
-			//adjust player z-index
-			svgElem.insertBefore(player.shape, pieceAfterPlayer.shape);
-		}
-
-
-
-
-		//update removedPieces
-		var time = Date.now();
-		for(i=0,len=removedPieces.length; i<len; i++){
-			var removedPiece = removedPieces[i];
-			var removedPieceProgress = (time - removedPiece.removedTime) / 1000;
-
-			if(removedPieceProgress > 1){
-				//console.log('removedPieces',removedPieces);
-				removeSvgShape(removedPiece);
-				removedPieces[i] = removedPieces[len-1];
-				len--;
-				i--;
-				removedPieces = removedPieces.slice(0,len);
-				//console.log('============>',removedPieces);
-			}else{
-				if(removedPiece.justRemoved){
-					removedPiece.justRemoved = false;
-					removedPiece.removedX = removedPiece.x;
-					removedPiece.removedY = removedPiece.y;
-				}
-				if(removedPiece.x < SIZE*0.5){
-					removedPiece.x = removedPiece.removedX - removedPieceProgress * SIZE;
-				}else{
-					removedPiece.x = removedPiece.removedX + removedPieceProgress * SIZE;
-				}
-				removedPiece.y = removedPiece.removedY - Math.sin(removedPieceProgress*PI) * SIZE * 0.4;
-				updatePieceStyle(removedPiece);
-
-				//console.log(removedPiece.x, removedPiece.y, removedPieceProgress);
-			}
-		}
-
+        bgCtx.drawImage(skyCanvas,0,0);
 	}
 
 	var THRESHOLD_DOWN = -0.02;
 	var THRESHOLD_UP = 0.02;
-	var computeCellPosRes = {};
+	computeCellPos.res = {};
 	function computeCellPos(row, col, res){
+		res = res || computeCellPos.res;
 		project( (col+0.5)/NUM_CELLS, (row-progress+0.5)/NUM_CELLS);
 		var thresholdDown = -0.02;
 		var thresholdUp = 0.02;
@@ -698,6 +972,7 @@ aa.add( 'die', 1,
 		res.x = project.res.x * SIZE;
 		res.y = project.res.y * SIZE + HORIZON_Y;
 		res.scale = project.res.scaleX;
+		return res;
 	}
 
 	function updatePieceStyle(piece){
@@ -882,17 +1157,17 @@ aa.add( 'die', 1,
 
 	function addSvgShape(piece){
 		var shape;
-		if(!svgCache[piece.shapeId]){
-			svgCache[piece.shapeId] = [];
+		if(!svgCache[piece.type]){
+			svgCache[piece.type] = [];
 		}
-		if(svgCache[piece.shapeId].length){
-			shape = svgCache[piece.shapeId].pop();
+		if(svgCache[piece.type].length){
+			shape = svgCache[piece.type].pop();
 		}else{
-			shape = svgMakeUse(piece.shapeId);
+			shape = svgMakeUse(piece.type);
 		}
 		//Important: we assume element are always added to the top of the screen
 		//so they have to be prepended in order to be painted in the correct order
-		if(svgElem.firstChild){
+		if(svgElem.firstChild && !piece.onTop){
 			svgElem.insertBefore(shape,svgElem.firstChild);
 		}else{
 			svgElem.appendChild(shape);
@@ -905,7 +1180,7 @@ aa.add( 'die', 1,
 	}
 
 	function removeSvgShape(piece){
-		svgCache[piece.shapeId].push(piece.shape);
+		svgCache[piece.type].push(piece.shape);
 		svgElem.removeChild(piece.shape);
 		piece.shape = null;
 	}
@@ -931,20 +1206,47 @@ aa.add( 'die', 1,
 		//We also transform the shape positions so that the piece origin is [OX,OY]
 		var OX = 5;
 		var OY = 8;
-		var PIECE_FILL_COLOR = '#eee';
-		var PIECE_STROKE_COLOR = '#555';
-		//PAWN
+
+		//ENEMY FILTER
+		makeFilter(ENEMY);
+		makeCheckTextDef(CHECK_TEXT,'CHECK');
+		//makeCheckTextDef(CHECK_MATE,'Check Mate !');
+
+
 		svgStyle(
 			makeDef(PAWN,[
 				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[5,3],'L',[2,8]]),
 				makeCircle(5,3,2)
 			]), PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
 		);
+		svgStyle(
+			makeDef(KING,[
+				makePath(['M',[5,1],'L',[5,-2],'M',[4,-1],'L',[6,-1]], {'stroke-width':3}),
+				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[6,3],'L',[7,1],'Q',[5,0],[3,1],'L',[4,3],'L',[2,8]]),
+			]), PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
+		);
+		svgStyle(
+			makeDef(KNIGHT,[
+				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[7,6],'Q',[8,3],[7,0],'L',[6,1],'L',[5,1],'L',[2,4],'L',[3,5],'L',[5,4],'L',[2,8]]),
+			]),  PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
+		);
+		svgStyle(
+			makeDef(ROOK,[
+				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[6.5,3],'L',[8,2],'L',[8,0],'L',[7,0],'L',[7,1],'L',[6,1],'L',[6,0],'L',[4,0],'L',[4,1],'L',[3,1],'L',[3,0],'L',[2,0],'L',[2,2],'L',[3.5,3],'L',[2,8]]),
+			]),  PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
+		);
+		svgStyle(
+			makeDef(BISHOP,[
+				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[6,4],'Q',[8,1.1],[5,0],'Q',[2,1.1],[4,4],'L',[2,8]]),
+				makeCircle(5,0,0.7),
+                makePath(['M',[3.8,0.8],'L',[4.4,2.5]], {'stroke-width':2}),
+			]),  PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
+		);
 		//PLAYER
 		svgStyle(
 			makeDef(PLAYER,[
-				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[5,3],'L',[2,8]]),
-				makeCircle(5,3,2)
+				makePath(['M',[5,1],'L',[5,-2],'M',[4,-1],'L',[6,-1]], {'stroke-width':3}),
+				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[6,3],'L',[7,1],'Q',[5,0],[3,1],'L',[4,3],'L',[2,8]]),
 			]), '#002', '#333', 0
 		);
 
@@ -959,6 +1261,18 @@ aa.add( 'die', 1,
 				shape.setAttributeNS(null,'y',-CELL_SIZE);
 				def.appendChild(shape);
 			}
+
+			defs.appendChild (def);
+			return def;
+		}
+
+		function makeFilter(id){
+			var def = document.createElementNS (xmlns, 'filter');
+			def.setAttributeNS (null, 'id', id);
+			svgAttrs(def, { x:'0', y:'0', width:'100%', height:'100%', 'color-interpolation-filters':'sRGB' });
+
+			def.innerHTML = '<feFlood flood-color="rgba(255,0,0,0.3)" result="COLOR"></feFlood>'+
+                            '<feComposite operator="atop" in="COLOR" in2="SourceGraphic"></feComposite>';
 
 			defs.appendChild (def);
 			return def;
@@ -991,9 +1305,12 @@ aa.add( 'die', 1,
 			return ellipse;
 		}
 
-		function makePath(list){
+		function makePath(list, style){
 			var path = document.createElementNS (xmlns, "path");
 			path.setAttributeNS (null, "d", makePathString(list));
+			if(style){
+				svgAttrs(path,style);
+			}
 			return path;
 		}
 
@@ -1021,29 +1338,56 @@ aa.add( 'die', 1,
 			return Math.round(CELL_SIZE * f)*0.1;
 		}
 
-		function svgStyle(svgElem, fill, stroke, strokeWidth){
-			var attrs = {};
-			if(typeof fill != 'undefined'){
-				attrs.fill = fill;
-			}
-			if(typeof stroke != 'undefined'){
-				attrs.stroke = stroke;
-			}
-			if(typeof strokeWidth != 'undefined'){
-				attrs.strokeWidth = strokeWidth;
-			}
-			svgAttrs(svgElem, attrs);
-			return svgElem;
-		}
+		function makeCheckTextDef(id, text){
+			/*
+			//Gradient
+			var def = document.createElementNS (xmlns, 'linearGradient');
+			def.setAttributeNS (null, 'id', CHECK_GRADIENT);
+			svgAttrs(def, { x1:'0', x2:'0', y1:'0', y2:'100%', height:'100%', 'gradientUnits':'userSpaceOnUse' });
+			def.innerHTML =
+                  '<stop stop-color="#FF5B99" offset="0%"></stop>' +
+                  '<stop stop-color="#FF5447" offset="50%"></stop>' +
+                  '<stop stop-color="#FF7B21" offset="100%"></stop>';
+            defs.appendChild(def);
+            */
 
-		function svgAttrs(el, attrs){
-			if(attrs){
-				for(var key in attrs){
-					el.setAttributeNS (null, key, attrs[key]);
-				}
-			}
-			return el;
+           var def = document.createElementNS (xmlns, 'text');
+            def.setAttributeNS (null, 'id', id);
+            svgAttrs(def,{
+            	'x':'-40',
+            	'font-size':'28',
+            	'fill':'red',
+            	'stroke':'black',
+            	'stroke-width':'1',
+            	'font-family':'Impact'
+            });
+            def.innerHTML = text;
+            defs.appendChild(def);
 		}
+	}
+
+	function svgAttrs(el, attrs){
+		if(attrs){
+			for(var key in attrs){
+				el.setAttributeNS (null, key, attrs[key]);
+			}
+		}
+		return el;
+	}
+
+	function svgStyle(svgElem, fill, stroke, strokeWidth){
+		var attrs = {};
+		if(typeof fill != 'undefined'){
+			attrs.fill = fill;
+		}
+		if(typeof stroke != 'undefined'){
+			attrs.stroke = stroke;
+		}
+		if(typeof strokeWidth != 'undefined'){
+			attrs.strokeWidth = strokeWidth;
+		}
+		svgAttrs(svgElem, attrs);
+		return svgElem;
 	}
 
 	//------------------------------------------------------------------------------------------------------------------
@@ -1160,6 +1504,15 @@ aa.add( 'die', 1,
 	};
 	document.onkeydown = function(e){
 		onkey(true, e);
+		//DEBUG
+		if(keyBoolMap.space){
+			raf = !raf;
+			console.log('debug toggle anim: ',raf);
+			if(raf){
+				lastTime = Date.now();
+				tic();
+			}
+		}
 	};
 
 	function onmouse(isDown,e){
@@ -1192,10 +1545,11 @@ aa.add( 'die', 1,
 		mouse.y = e.clientY;
 	};
 
+	/*
 	document.oncontextmenu = function(e){
 		return false;
 	};
-
+	*/
 
 	init();
 };;(function() {
