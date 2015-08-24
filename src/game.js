@@ -72,17 +72,19 @@ window.onload = function(){
 
 	var checkText;
 
-    //pieces
-    var PLAYER = 'P';
+    //pieces id (used in SVG and checkboard)
+    var HERO_KING = 'h';
+    var ENEMY_KING = 'e';
     var PAWN = 'p';
-    var KING = 'K';
     var ROOK = 'r';
     var BISHOP = 'b';
     var KNIGHT = 'k';
-    //filters
-    var ENEMY = 'e';
+    //other SCG ids
+    var ENEMY_FILTER = 'ef';
     var CHECK_TEXT = 'ct';
 	var CHECK_GRADIENT = 'cg';
+
+	var DANGER = '*';
 
 	//------------------------------------------------------------------------------------------------------------------
 	// main loop
@@ -124,22 +126,35 @@ window.onload = function(){
 	}
 
 	function initCheckBoard(){
+		var startBlockIndex = 0; //FOR DEBUG
 		var currentBlockIndex = 0;
-        var startBlockIndex = 6;
+        var spaceBetweenBlocks = 2;
 
-		//0 TODO: intro
+		//0 TODO: intro: first pawn
 		block(
 			'',
 			'',
 			'',
-			'  krb',
 			'',
 			'',
 			'',
-			'    p'
+			'',
+			''
 		);
 
-		//1 scattered pawns
+		//1 first pawn
+		block(
+			'',
+			'',
+			'    P',
+			'   * *',
+			'',
+			'',
+			'',
+			''
+		);
+
+		//2 scattered pawns
 		block(
 			'  pppp',
 			'  pppp',
@@ -148,10 +163,10 @@ window.onload = function(){
 			'',
 			'     p',
 			'',
-			''
+			' p'
 		);
 
-		//2 pawn rows
+		//3 pawn rows
 		block(
 			'',
 			'pppppp',
@@ -163,7 +178,7 @@ window.onload = function(){
 			''
 		);
 
-		//3 triangle
+		//4 triangle
 		block(
 			'',
 			'pp   ppp',
@@ -175,7 +190,7 @@ window.onload = function(){
 			''
 		);
 
-		//4 sawtooth
+		//5 sawtooth
 		block(
 			'',
 			'   pp',
@@ -187,7 +202,7 @@ window.onload = function(){
 			''
 		);
 
-		//5 wedges
+		//6 wedges
 		block(
 			'',
 			'     ppp',
@@ -199,17 +214,115 @@ window.onload = function(){
 			''
 		);
 
-		//6
+		//7 first rook
 		block(
+			'   ',
 			'   p',
-			'   r',
+			'   *',
+			'***R****',
+			'   *',
+			'   p',
 			'',
-			'   p',
-			'   p',
+			''
+		);
+
+		//8 rook diag
+		block(
+			'',
+			'r',
+			' r',
+			'  r',
+			'   r',
+			'    r',
+			'     r',
+			'pppppp'
+		);
+
+		//9 rook labyrinth
+		block(
+			'',
+			' r     p',
+			'      pp',
+			'   p   r',
+			'p   p',
+			'r p p',
+			'r   p',
+			'ppppp  p'
+		);
+
+		//10 first bishop
+		block(
+			'*     *',
+			' *   *',
+			'  * *',
+			'...B',
+			'  * *',
+			' *   *',
+			'*     *',
+			'       *'
+		);
+
+		//11 bishop field
+		block(
+			'',
+			'b b b b',
+			'',
+			'',
+			'',
 			'',
 			'',
 			''
 		);
+
+		//12 rooks & bishops simple
+		block(
+			'',
+			'r.p..p.r',
+			'p......p',
+			'',
+			'b      b',
+			'pp....pp',
+			'',
+			''
+		);
+
+
+		//13 pawns, bishops and rooks
+		block(
+			'',
+			'r',
+			' r  p..b',
+			'     ..r',
+			'....p',
+			'...p',
+			'..p',
+			'pp.....p'
+		);
+
+		//14 first knight
+		block(
+			'',
+			'  * *',
+			' *   *',
+			'   K',
+			' *   *',
+			'  * *',
+			'',
+			''
+		);
+
+		//15 knight rows
+		block(
+			'p',
+			'r...p',
+			'',
+			'',
+			'......kk',
+			'',
+			'pkk',
+			''
+		);
+
 
 		/*
 
@@ -220,7 +333,7 @@ window.onload = function(){
 		*/
 
 		//Add player
-		player = makePiece(PLAYER, 5 + progress, 5);
+		player = makePiece(HERO_KING, 2, 3);
 
 
 		/*
@@ -252,18 +365,27 @@ window.onload = function(){
 		//Create a block of 8/8
 		function block(){
 			if(currentBlockIndex >= startBlockIndex){
-				var blockIndex = startBlockIndex ? (currentBlockIndex - startBlockIndex +1) : 0;
+				var blockIndex = startBlockIndex ? (currentBlockIndex - startBlockIndex +1) : currentBlockIndex;
 				var args = Array.prototype.slice.call(arguments);
 				if(args.length != NUM_CELLS) throw new Error();
 				for(var i=args.length-1; i>=0; i--){
 					var row = args[i];
 					if(row.length > NUM_CELLS) throw new Error();
-					var rowIndex = (blockIndex+1)*NUM_CELLS - i -1;
+					var rowIndex = (blockIndex+1)*(NUM_CELLS+spaceBetweenBlocks) - i -1;
 					if(row !== ''){
+						if(!checkBoard[rowIndex]){
+							checkBoard[rowIndex] = {};
+						}
 						for(var j=0; j<row.length; j++){
 							var char = row.charAt(j);
-							if(char!==' ' && char!=='-'){
-								makePiece(char, rowIndex, j);
+							if(char == '*'){
+								checkBoard[rowIndex][j] = DANGER;
+							}else if(char!==' ' && char!=='.'){
+								var lowerChar = char.toLowerCase();
+								var piece = makePiece(lowerChar, rowIndex, j);
+								if(char != lowerChar){
+									piece.showDanger = true;
+								}
 							}
 						}
 
@@ -280,7 +402,8 @@ window.onload = function(){
 			shape: null,
 			type: type,
 			row: row,
-			col: col
+			col: col,
+			showDanger: false
 		};
 		if(!checkBoard[row]){
 			checkBoard[row] = {};
@@ -488,7 +611,7 @@ window.onload = function(){
 		if(enemyPiece){
 			return enemyPiece;
 		}
-		//rook
+		//ROOK
 		var i,j,piece;
 		//Check left
 		for(j=col-1; j>=0 ; j--){
@@ -502,7 +625,7 @@ window.onload = function(){
 			}
 		}
 		//Check right
-		for(j=row+1; j<=NUM_CELLS ; j++){
+		for(j=col+1; j<=NUM_CELLS ; j++){
 			piece = getPieceAt(row,j);
 			if(piece){
 				if(piece.type == ROOK){
@@ -512,7 +635,7 @@ window.onload = function(){
 				}
 			}
 		}
-		//Check down
+		//Check up
 		for(i=row+1; i<=row+NUM_CELLS ; i++){
 			piece = getPieceAt(i,col);
 			if(piece){
@@ -523,7 +646,7 @@ window.onload = function(){
 				}
 			}
 		}
-		//Check up
+		//Check down
 		for(i=row-1; i>=row-NUM_CELLS ; i--){
 			piece = getPieceAt(i,col);
 			if(piece){
@@ -534,13 +657,71 @@ window.onload = function(){
 				}
 			}
 		}
+
+		//BISHOP
+		//diag bottom left
+		for(j=col-1,i=row-1; j>=0; j--,i--){
+			piece = getPieceAt(i,j);
+			if(piece){
+				if(piece.type == BISHOP){
+					return piece;
+				}else{
+					break;
+				}
+			}
+		}
+		//diag bottom right
+		for(j=col+1,i=row-1; j<NUM_CELLS; j++,i--){
+			piece = getPieceAt(i,j);
+			if(piece){
+				if(piece.type == BISHOP){
+					return piece;
+				}else{
+					break;
+				}
+			}
+		}
+		//diag top left
+		for(j=col-1,i=row+1; j>=0; j--,i++){
+			piece = getPieceAt(i,j);
+			if(piece){
+				if(piece.type == BISHOP){
+					return piece;
+				}else{
+					break;
+				}
+			}
+		}
+		//diag top right
+		for(j=col+1,i=row+1; j<NUM_CELLS; j++,i++){
+			piece = getPieceAt(i,j);
+			if(piece){
+				if(piece.type == BISHOP){
+					return piece;
+				}else{
+					break;
+				}
+			}
+		}
+
+		enemyPiece =
+        	getPieceAt(row+2,col-1,KNIGHT) ||
+        	getPieceAt(row-2,col-1,KNIGHT) ||
+        	getPieceAt(row+2,col+1,KNIGHT) ||
+            getPieceAt(row-2,col+1,KNIGHT) ||
+            getPieceAt(row+1,col-2,KNIGHT) ||
+			getPieceAt(row-1,col-2,KNIGHT) ||
+			getPieceAt(row+1,col+2,KNIGHT) ||
+			getPieceAt(row-1,col+2,KNIGHT);
+
+		return enemyPiece;
 	}
 
 	function getPieceAt(row, col,type){
 		var rowArray = checkBoard[row];
 		if(rowArray){
 			var piece = rowArray[col];
-			if(piece && (!type || piece.type == type)){
+			if(typeof piece == 'object' && (!type || piece.type == type)){
 				return checkBoard[row][col];
 			}
 		}
@@ -550,6 +731,21 @@ window.onload = function(){
 		removedPieces.push(piece);
 		piece.removedTime = now;
 		piece.justRemoved = true;
+
+		if(piece.showDanger){
+			//not very subtle but does the job, just scan everything in a wide range, we ensure it won't be a problem when building the checkboard
+			for(var i=piece.row-NUM_CELLS; i<piece.row+NUM_CELLS; i++){
+				var rowContent = checkBoard[i];
+				if(rowContent){
+					for(var j=piece.col-NUM_CELLS; j<piece.col+NUM_CELLS; j++){
+						if(rowContent[j]==DANGER){
+							delete rowContent[j];
+						}
+					}
+				}
+			}
+
+		}
 	}
 
 
@@ -605,7 +801,7 @@ window.onload = function(){
 					changes = true;
 					//console.log('removing row',i);
 					for(colIndex=0; colIndex<NUM_CELLS; colIndex++){
-						if(row[colIndex]){
+						if(typeof row[colIndex] == 'object'){
 							removeSvgShape(row[colIndex]);
 						}
 					}
@@ -627,7 +823,7 @@ window.onload = function(){
 						}else{
 							index -= (colIndex+1)/2;
 						}
-						if(row[index]){
+						if(typeof row[index] == 'object'){
 							addSvgShape(row[index]);
 						}
 					}
@@ -662,7 +858,7 @@ window.onload = function(){
 			var row = checkBoard[rowIndex];
 			if(row){
 				for(var colIndex=0; colIndex<NUM_CELLS; colIndex++){
-					if(row[colIndex]){
+					if(typeof row[colIndex] == 'object'){
 						var piece = row[colIndex];
 						//if(piece != player){
 							computeCellPos(piece.row, piece.col, piece);
@@ -703,7 +899,7 @@ window.onload = function(){
 					player.x += shake;
 					updatePieceStyle(player);
 					//color enemy piece
-					player.enemyPiece.shape.style.filter = 'url(#'+ENEMY+')';
+					player.enemyPiece.shape.style.filter = 'url(#'+ENEMY_FILTER+')';
 				}else{
 					//compute old pos
 					computeCellPos(player.oldRow, player.oldCol);
@@ -817,6 +1013,13 @@ window.onload = function(){
 				}
 				bgCtx.fill();
 
+				var rowContent = checkBoard[i+progressIndex];
+				var isDangerTile = rowContent && rowContent[j] == DANGER;
+				if(isDangerTile){
+					bgCtx.fillStyle = 'rgba('+INVALID_CELL_COLOR_RGB+',0.5)';
+					bgCtx.fill();
+				}
+
 				if(player.invalid && player.invalidCol == j && player.invalidRow == i + progressIndex){
 					//invalid tile
 					var invalidOpacity = 1.5 * (playerAnimProgress < 0.5 ? playerAnimProgress : 1-playerAnimProgress);
@@ -824,6 +1027,7 @@ window.onload = function(){
 					bgCtx.fill();
 				}
 			}
+			/*
 			//Draw checkboard line
 			if( (i+progressIndex) % NUM_CELLS === 0){
 				project(0, (i+di)/NUM_CELLS, p1);
@@ -836,6 +1040,7 @@ window.onload = function(){
                 bgCtx.strokeWidth = '1';
             	bgCtx.stroke();
 			}
+			*/
 		}
 
 
@@ -1098,7 +1303,7 @@ window.onload = function(){
 		var OY = 8;
 
 		//ENEMY FILTER
-		makeFilter(ENEMY);
+		makeFilter(ENEMY_FILTER);
 		makeCheckTextDef(CHECK_TEXT,'CHECK');
 		//makeCheckTextDef(CHECK_MATE,'Check Mate !');
 
@@ -1110,7 +1315,7 @@ window.onload = function(){
 			]), PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
 		);
 		svgStyle(
-			makeDef(KING,[
+			makeDef(ENEMY_KING,[
 				makePath(['M',[5,1],'L',[5,-2],'M',[4,-1],'L',[6,-1]], {'stroke-width':3}),
 				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[6,3],'L',[7,1],'Q',[5,0],[3,1],'L',[4,3],'L',[2,8]]),
 			]), PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
@@ -1132,9 +1337,9 @@ window.onload = function(){
                 makePath(['M',[3.8,0.8],'L',[4.4,2.5]], {'stroke-width':2}),
 			]),  PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
 		);
-		//PLAYER
+		//HERO_KING
 		svgStyle(
-			makeDef(PLAYER,[
+			makeDef(HERO_KING,[
 				makePath(['M',[5,1],'L',[5,-2],'M',[4,-1],'L',[6,-1]], {'stroke-width':3}),
 				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[6,3],'L',[7,1],'Q',[5,0],[3,1],'L',[4,3],'L',[2,8]]),
 			]), '#002', '#333', 0
