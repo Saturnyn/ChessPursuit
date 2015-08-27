@@ -57,11 +57,13 @@ window.onload = function(){
 	var lastTime;
     var MS_TO_S = 1/1000;
 
+	var gameOverScreen = null;
 	var gameIsOver = false;
     var homeScreen = false;
     var progress = 0;	//expressed as a number of rows
     var progressPerSec = 1; //1
-    var checkBoard = {};
+    var checkBoard = null;
+    var checkPoints = null;
     var topRowDisplayed = -1;
     var raf = true;
     var removedPieces = [];
@@ -85,6 +87,7 @@ window.onload = function(){
 	var CHECK_GRADIENT = 'cg';
 
 	var DANGER = '*';
+	var CHECK_POINT = '#';
 
 	//------------------------------------------------------------------------------------------------------------------
 	// main loop
@@ -94,41 +97,39 @@ window.onload = function(){
 		body.appendChild(bgCanvas);
 		initSvg();
 		initShadowCanvas();
-
 		drawSky();
-		initCheckBoard();
-
 		onResize();
+
+		initCheckBoard(0);
+
         tic();
-
-		/*
-		var p = [0,0.5,1,1.5,2];
-		var A_Y = A_S;
-		var B_Y = B_S;
-		var C_Y = C_S;
-		console.log(A_Y,B_Y,C_Y);
-
-		for(var i =0; i<p.length ; i++){
-			var x = p[i];
-			var y = quadraticEq(x,A_Y,B_Y,C_Y);
-			var res = [ reverseQuadraticEq(y,A_Y,B_Y,C_Y, true), reverseQuadraticEq(y,A_Y,B_Y,C_Y, false) ];
-			console.log(res[0]==x || res[1] == x, x,y,res);
-		}
-		*/
-		/*
-		var x = 0.35;
-		var y = 0.7;
-		project(x,y);
-		reverseProject(project.res.x, project.res.y);
-		console.log(x,project.res.x,reverseProject.res.x);
-		console.log(y,project.res.y,reverseProject.res.y);
-		*/
 	}
 
-	function initCheckBoard(){
-		var startBlockIndex = 0; //FOR DEBUG
-		var currentBlockIndex = 0;
-        var spaceBetweenBlocks = 2;
+	function restart(){
+		//find we checkpoint we were at
+		var checkPointIndex = 0;
+		for(var i=0; i<checkPoints.length; i++){
+			if(progress < checkPoints[i]){
+				if(i>0){
+					checkPointIndex = i-1;
+				}
+				break;
+			}
+		}
+		//reinitialize game
+		initCheckBoard(checkPointIndex);
+		//prepare next update
+		lastTime = null;
+	}
+
+	function initCheckBoard(startCheckPointIndex){
+		if(checkBoard){
+			destroyCheckBoard();
+		}
+		checkBoard = {};
+		checkPoints = [0];
+		var CHECK_POINT_HEIGHT = 5;
+		var currentRowIndex = 0;
 
 		//0 TODO: intro: first pawn
 		block(
@@ -138,16 +139,17 @@ window.onload = function(){
 			'',
 			'',
 			'',
-			'',
-			''
+			'pppppppp',
+			'   e    '
 		);
 
 		//1 first pawn
 		block(
+			{showThreat:'p'},
 			'',
 			'',
-			'    P',
-			'   * *',
+			'    p',
+			'',
 			'',
 			'',
 			'',
@@ -214,13 +216,16 @@ window.onload = function(){
 			''
 		);
 
+		checkPoint();
+
 		//7 first rook
 		block(
+			{showThreat:'r'},
 			'   ',
 			'   p',
-			'   *',
-			'***R****',
-			'   *',
+			'',
+			'   r',
+			'',
 			'   p',
 			'',
 			''
@@ -250,16 +255,19 @@ window.onload = function(){
 			'ppppp  p'
 		);
 
+		checkPoint();
+
 		//10 first bishop
 		block(
-			'*     *',
-			' *   *',
-			'  * *',
-			'...B',
-			'  * *',
-			' *   *',
-			'*     *',
-			'       *'
+			{showThreat:'b'},
+			'',
+			'',
+			'',
+			'...b',
+			'',
+			'',
+			'',
+			''
 		);
 
 		//11 bishop field
@@ -299,14 +307,17 @@ window.onload = function(){
 			'pp.....p'
 		);
 
+		checkPoint();
+
 		//14 first knight
 		block(
+			{showThreat:'k'},
 			'',
-			'  * *',
-			' *   *',
-			'   K',
-			' *   *',
-			'  * *',
+			'',
+			'   k',
+			'',
+			'',
+			'',
 			'',
 			''
 		);
@@ -332,95 +343,124 @@ window.onload = function(){
        	p(ROOK,6,3);
 		*/
 
-		//Add player
-		player = makePiece(HERO_KING, 2, 3);
 
-
-		/*
-		//Create a piece, row / col can be an array of two values to set lines
-		function piece(type, row, col){
-			var rowFrom = row;
-			var rowTo = row;
-			var colFrom = col;
-			var colTo = col;
-
-			if(typeof row != 'number'){
-				rowFrom = row[0];
-				rowTo = row[1];
-			}
-			if(typeof col != 'number'){
-				colFrom = col[0];
-				colTo = col[1];
-			}
-			var lastPiece = null;
-			for(var i=rowFrom; i<=rowTo; i++){
-				for(var j=colFrom; j<=colTo; j++){
-					lastPiece = makePiece(type,i + currentBlockIndex * NUM_CELLS,j);
-				}
-			}
-			return lastPiece;
+		if(startCheckPointIndex === 0){
+			//Add player
+			player = addPieceAt(HERO_KING, 5, 3).piece;
+			progress = 0;
+		}else{
+			progress = checkPoints[startCheckPointIndex];
+			player = addPieceAt(HERO_KING, progress, 3).piece;
+			progress -= 4;
 		}
-		*/
+
+		function checkPoint(){
+			var center = Math.ceil(CHECK_POINT_HEIGHT/2);
+			checkPoints.push(currentRowIndex + center);
+			for(var i=0; i<CHECK_POINT_HEIGHT ; i++){
+				checkBoard[currentRowIndex] = [];
+				if(i==center){
+					for(var j=0 ; j<NUM_CELLS; j++){
+						checkBoard[currentRowIndex][j] = {checkPoint:true};
+					}
+				}
+				currentRowIndex ++;
+			}
+		}
 
 		//Create a block of 8/8
 		function block(){
-			if(currentBlockIndex >= startBlockIndex){
-				var blockIndex = startBlockIndex ? (currentBlockIndex - startBlockIndex +1) : currentBlockIndex;
-				var args = Array.prototype.slice.call(arguments);
-				if(args.length != NUM_CELLS) throw new Error();
-				for(var i=args.length-1; i>=0; i--){
-					var row = args[i];
-					if(row.length > NUM_CELLS) throw new Error();
-					var rowIndex = (blockIndex+1)*(NUM_CELLS+spaceBetweenBlocks) - i -1;
+			var hasStars = false;
+			var piece;
+			var args = Array.prototype.slice.call(arguments);
+			var options;
+			if(typeof args[0] == 'object'){
+				options = args.shift();
+			}else{
+				options = {};
+			}
+			var showThreatCell;
+			var doAdd = startCheckPointIndex < checkPoints.length;
+			var startRowIndex =currentRowIndex;
+			var row, i,j;
+			for(i=args.length-1; i>=0; i--){
+				row = args[i];
+				if(row.length > NUM_CELLS) throw new Error();
+
+				checkBoard[currentRowIndex] = [];
+				if(doAdd){
 					if(row !== ''){
-						if(!checkBoard[rowIndex]){
-							checkBoard[rowIndex] = {};
-						}
-						for(var j=0; j<row.length; j++){
+						for(j=0; j<row.length; j++){
 							var char = row.charAt(j);
-							if(char == '*'){
-								checkBoard[rowIndex][j] = DANGER;
-							}else if(char!==' ' && char!=='.'){
+							if(char!==' ' && char!=='.'){
 								var lowerChar = char.toLowerCase();
-								var piece = makePiece(lowerChar, rowIndex, j);
+								addPieceAt(lowerChar, currentRowIndex, j);
+								if(options.showThreat == lowerChar){
+									showThreatCell = checkBoard[currentRowIndex][j];
+								}
 								if(char != lowerChar){
-									piece.showDanger = true;
+									//TODO: allied pieces
 								}
 							}
 						}
-
+					}
+				}
+				currentRowIndex++;
+			}
+			if(showThreatCell){
+				showThreatCell.piece.showThreat = true;
+				for(i=startRowIndex; i<currentRowIndex; i++){
+					row = checkBoard[i];
+					for(j=0; j<NUM_CELLS; j++){
+						var cell = getThreateningCell(i,j);
+						if(cell && cell.piece == showThreatCell.piece){
+							if(!checkBoard[i][j]){
+								checkBoard[i][j] = {};
+							}
+							checkBoard[i][j].showThreat = true;
+						}
 					}
 				}
 			}
-			currentBlockIndex++;
 		}
-
 	}
 
-	function makePiece(type, row, col){
+	function destroyCheckBoard(){
+		for(var row in checkBoard){
+			if(checkBoard[row]){
+				for(var col in checkBoard[row]){
+					var cell = checkBoard[col][row];
+					if(cell && cell.piece){
+						removeSvgShape(cell.piece);
+					}
+				}
+			}
+		}
+	}
+
+
+
+	function addPieceAt(type, row, col){
 		var piece = {
 			shape: null,
 			type: type,
 			row: row,
 			col: col,
-			showDanger: false
+			showThreat: false
 		};
 		if(!checkBoard[row]){
-			checkBoard[row] = {};
+			checkBoard[row] = [];
 		}
-		checkBoard[row][col] = piece;
-		return piece;
+		if(!checkBoard[row][col]){
+			checkBoard[row][col] = {};
+		}
+		checkBoard[row][col].piece = piece;
+		return checkBoard[row][col];
 	}
 
 	//input
 	var KEY_LATENCY = 6;
 	var KEY_DONE = -1;
-	var keys = {
-		left:-1,
-    	right:-1,
-		up:-1,
-		down:-1
-	};
 	var keysBlockedUntilAllUp = false;
 	var mouse = {};
 	var mouseRow = -1;
@@ -573,26 +613,35 @@ window.onload = function(){
 			row = rowMax;
 		}
 		if(col != oldCol || row != oldRow){
-			//can cell be taken ?
-			var enemyPiece = getEnemyPiece(row,col);
+			var oldCell = checkBoard[oldRow][oldCol];
+            if(!checkBoard[row]){
+                checkBoard[row] = [];
+            }
+            var cell = checkBoard[row][col];
+            if(!cell){
+                cell = {};
+                checkBoard[row][col] = cell;
+            }
 
-			if(enemyPiece){
+			//can cell be taken ?
+			var threateningCell = getThreateningCell(row,col);
+			if(threateningCell){
 				//invalid position
 				player.invalid = true;
                 player.invalidCol = col;
                 player.invalidRow = row;
-                player.enemyPiece = enemyPiece;
+                player.threateningPiece = threateningCell.piece;
 				col = oldCol;
 				row = oldRow;
 			}else{
 				player.invalid = false;
-				if(checkBoard[row][col]){
+				if(cell.piece){
 					//take the piece
-					destroyPiece(checkBoard[row][col]);
+					destroyPiece(cell.piece);
 				}
 				//move piece on check board
-				delete checkBoard[oldRow][oldCol];
-				checkBoard[row][col] = player;
+				oldCell.piece = null;
+				cell.piece = player;
 			}
 			player.oldCol = oldCol;
 			player.oldRow = oldRow;
@@ -603,22 +652,22 @@ window.onload = function(){
 		}
 	}
 
-	function getEnemyPiece(row,col){
+	function getThreateningCell(row,col){
 		//pawns
-		var enemyPiece =
-			getPieceAt(row+1,col-1,PAWN) ||
-			getPieceAt(row+1,col+1,PAWN);
-		if(enemyPiece){
-			return enemyPiece;
+		var threateningCell =
+			getCellWithPieceAt(row+1,col-1,PAWN) ||
+			getCellWithPieceAt(row+1,col+1,PAWN);
+		if(threateningCell){
+			return threateningCell;
 		}
 		//ROOK
-		var i,j,piece;
+		var i,j,cell;
 		//Check left
 		for(j=col-1; j>=0 ; j--){
-			piece = getPieceAt(row,j);
-			if(piece){
-				if(piece.type == ROOK){
-					return piece;
+			cell = getCellWithPieceAt(row,j);
+			if(cell && cell.piece){
+				if(cell.piece.type == ROOK){
+					return cell;
 				}else{
 					break;
 				}
@@ -626,103 +675,103 @@ window.onload = function(){
 		}
 		//Check right
 		for(j=col+1; j<=NUM_CELLS ; j++){
-			piece = getPieceAt(row,j);
-			if(piece){
-				if(piece.type == ROOK){
-					return piece;
-				}else{
-					break;
-				}
-			}
+			cell = getCellWithPieceAt(row,j);
+			if(cell && cell.piece){
+                if(cell.piece.type == ROOK){
+                    return cell;
+                }else{
+                    break;
+                }
+            }
 		}
 		//Check up
 		for(i=row+1; i<=row+NUM_CELLS ; i++){
-			piece = getPieceAt(i,col);
-			if(piece){
-				if(piece.type == ROOK){
-					return piece;
-				}else{
-					break;
-				}
-			}
+			cell = getCellWithPieceAt(i,col);
+			if(cell && cell.piece){
+                if(cell.piece.type == ROOK){
+                    return cell;
+                }else{
+                    break;
+                }
+            }
 		}
 		//Check down
 		for(i=row-1; i>=row-NUM_CELLS ; i--){
-			piece = getPieceAt(i,col);
-			if(piece){
-				if(piece.type == ROOK){
-					return piece;
-				}else{
-					break;
-				}
-			}
+			cell = getCellWithPieceAt(i,col);
+			if(cell && cell.piece){
+                if(cell.piece.type == ROOK){
+                    return cell;
+                }else{
+                    break;
+                }
+            }
 		}
 
 		//BISHOP
 		//diag bottom left
 		for(j=col-1,i=row-1; j>=0; j--,i--){
-			piece = getPieceAt(i,j);
-			if(piece){
-				if(piece.type == BISHOP){
-					return piece;
-				}else{
-					break;
-				}
-			}
+			cell = getCellWithPieceAt(i,j);
+			if(cell && cell.piece){
+                if(cell.piece.type == BISHOP){
+                    return cell;
+                }else{
+                    break;
+                }
+            }
 		}
 		//diag bottom right
 		for(j=col+1,i=row-1; j<NUM_CELLS; j++,i--){
-			piece = getPieceAt(i,j);
-			if(piece){
-				if(piece.type == BISHOP){
-					return piece;
-				}else{
-					break;
-				}
-			}
+			cell = getCellWithPieceAt(i,j);
+			if(cell && cell.piece){
+                if(cell.piece.type == BISHOP){
+                    return cell;
+                }else{
+                    break;
+                }
+            }
 		}
 		//diag top left
 		for(j=col-1,i=row+1; j>=0; j--,i++){
-			piece = getPieceAt(i,j);
-			if(piece){
-				if(piece.type == BISHOP){
-					return piece;
-				}else{
-					break;
-				}
-			}
+			cell = getCellWithPieceAt(i,j);
+			if(cell && cell.piece){
+                if(cell.piece.type == BISHOP){
+                    return cell;
+                }else{
+                    break;
+                }
+            }
 		}
 		//diag top right
 		for(j=col+1,i=row+1; j<NUM_CELLS; j++,i++){
-			piece = getPieceAt(i,j);
-			if(piece){
-				if(piece.type == BISHOP){
-					return piece;
-				}else{
-					break;
-				}
-			}
+			cell = getCellWithPieceAt(i,j);
+			if(cell && cell.piece){
+                if(cell.piece.type == BISHOP){
+                    return cell;
+                }else{
+                    break;
+                }
+            }
 		}
 
-		enemyPiece =
-        	getPieceAt(row+2,col-1,KNIGHT) ||
-        	getPieceAt(row-2,col-1,KNIGHT) ||
-        	getPieceAt(row+2,col+1,KNIGHT) ||
-            getPieceAt(row-2,col+1,KNIGHT) ||
-            getPieceAt(row+1,col-2,KNIGHT) ||
-			getPieceAt(row-1,col-2,KNIGHT) ||
-			getPieceAt(row+1,col+2,KNIGHT) ||
-			getPieceAt(row-1,col+2,KNIGHT);
+		threateningCell =
+        	getCellWithPieceAt(row+2,col-1,KNIGHT) ||
+        	getCellWithPieceAt(row-2,col-1,KNIGHT) ||
+        	getCellWithPieceAt(row+2,col+1,KNIGHT) ||
+            getCellWithPieceAt(row-2,col+1,KNIGHT) ||
+            getCellWithPieceAt(row+1,col-2,KNIGHT) ||
+			getCellWithPieceAt(row-1,col-2,KNIGHT) ||
+			getCellWithPieceAt(row+1,col+2,KNIGHT) ||
+			getCellWithPieceAt(row-1,col+2,KNIGHT);
 
-		return enemyPiece;
+		return threateningCell;
 	}
 
-	function getPieceAt(row, col,type){
+	function getCellWithPieceAt(row, col,type){
 		var rowArray = checkBoard[row];
 		if(rowArray){
-			var piece = rowArray[col];
-			if(typeof piece == 'object' && (!type || piece.type == type)){
-				return checkBoard[row][col];
+			var cell = rowArray[col];
+			if(cell && cell.piece && (!type || cell.piece.type == type)){
+				return cell;
 			}
 		}
 	}
@@ -732,14 +781,14 @@ window.onload = function(){
 		piece.removedTime = now;
 		piece.justRemoved = true;
 
-		if(piece.showDanger){
+		if(piece.showThreat){
 			//not very subtle but does the job, just scan everything in a wide range, we ensure it won't be a problem when building the checkboard
 			for(var i=piece.row-NUM_CELLS; i<piece.row+NUM_CELLS; i++){
 				var rowContent = checkBoard[i];
 				if(rowContent){
 					for(var j=piece.col-NUM_CELLS; j<piece.col+NUM_CELLS; j++){
-						if(rowContent[j]==DANGER){
-							delete rowContent[j];
+						if(rowContent[j]){
+							rowContent[j].showThreat = false;
 						}
 					}
 				}
@@ -755,10 +804,9 @@ window.onload = function(){
 
 		//lives=1;
 		if(gameIsOver){
-			if(keys.space){
-				gameIsOver = false;
-				init();
-				keys.space = false;
+			if(keys.space === 0){
+				setGameIsOver(false);
+				keys.space = -1;
 			}
 		}else{
 			if(homeScreen){
@@ -780,14 +828,28 @@ window.onload = function(){
 		}
 	}
 
+	function setGameIsOver(val){
+		if(val != gameIsOver){
+			gameIsOver = val;
+
+			if(gameIsOver){
+				gameOverScreen.style.display = 'block';
+			}else{
+				gameOverScreen.style.display = 'none';
+				restart();
+			}
+		}
+	}
+
 	function update(){
 		now = Date.now();
 		if(lastTime){
 			progress += progressPerSec * (now-lastTime) * MS_TO_S;
 		}
 
-		if(player.row < progress - 0.5){
-			movePlayer(player.row+1, player.col);
+		if(player.row < progress - 1){
+			setGameIsOver(true);
+			return;
 		}
 
 		//update checkboard based on progress
@@ -801,11 +863,10 @@ window.onload = function(){
 					changes = true;
 					//console.log('removing row',i);
 					for(colIndex=0; colIndex<NUM_CELLS; colIndex++){
-						if(typeof row[colIndex] == 'object'){
-							removeSvgShape(row[colIndex]);
+						if(row[colIndex] && row[colIndex].piece){
+							removeSvgShape(row[colIndex].piece);
 						}
 					}
-					delete checkBoard[i];
 				}
 			}
 
@@ -823,12 +884,10 @@ window.onload = function(){
 						}else{
 							index -= (colIndex+1)/2;
 						}
-						if(typeof row[index] == 'object'){
-							addSvgShape(row[index]);
+						if(row[index] && row[index].piece){
+							addSvgShape(row[index].piece);
 						}
 					}
-				}else{
-					checkBoard[i] = [];
 				}
 			}
 			//if(changes) console.log('updated checkboard, topRowDisplayed',topRowDisplayed,topRow,checkBoard);
@@ -848,18 +907,20 @@ window.onload = function(){
 	var PIECE_FILL_COLOR = '#eee';
     var PIECE_STROKE_COLOR = '#555';
     var INVALID_CELL_COLOR_RGB = '255,0,0';
+    var CHECK_POINT_COLOR = 'rgba(93, 255, 182, 0.56)';
 
 	function render(){
 		// SVG ---
 		 
 		//update pieces
 		var pieceAfterPlayer;
+		var row;
 		for(var rowIndex=topRowDisplayed-NUM_CELLS_DISPLAYED-5; rowIndex<=topRowDisplayed; rowIndex++){
-			var row = checkBoard[rowIndex];
+			row = checkBoard[rowIndex];
 			if(row){
 				for(var colIndex=0; colIndex<NUM_CELLS; colIndex++){
-					if(typeof row[colIndex] == 'object'){
-						var piece = row[colIndex];
+					if(row[colIndex] && row[colIndex].piece){
+						var piece = row[colIndex].piece;
 						//if(piece != player){
 							computeCellPos(piece.row, piece.col, piece);
 							updatePieceStyle(piece);
@@ -873,7 +934,7 @@ window.onload = function(){
 		}
 		if(pieceAfterPlayer){
 			//adjust player z-index
-			svgElem.insertBefore(player.shape, pieceAfterPlayer.shape);
+			svgPiecesLayer.insertBefore(player.shape, pieceAfterPlayer.shape);
 		}
 
 		//update player anim
@@ -886,8 +947,8 @@ window.onload = function(){
 			}
 			if(playerAnimProgress<0 || playerAnimProgress>=1){
 				player.anim = false;
-				if(player.invalid && player.enemyPiece){
-					player.enemyPiece.shape.style.filter = 'none';
+				if(player.invalid && player.threateningPiece){
+					player.threateningPiece.shape.style.filter = 'none';
 				}
 				player.invalid = false;
 			}else{
@@ -899,7 +960,7 @@ window.onload = function(){
 					player.x += shake;
 					updatePieceStyle(player);
 					//color enemy piece
-					player.enemyPiece.shape.style.filter = 'url(#'+ENEMY_FILTER+')';
+					player.threateningPiece.shape.style.filter = 'url(#'+ENEMY_FILTER+')';
 				}else{
 					//compute old pos
 					computeCellPos(player.oldRow, player.oldCol);
@@ -1012,12 +1073,18 @@ window.onload = function(){
 					}
 				}
 				bgCtx.fill();
-
-				var rowContent = checkBoard[i+progressIndex];
-				var isDangerTile = rowContent && rowContent[j] == DANGER;
-				if(isDangerTile){
-					bgCtx.fillStyle = 'rgba('+INVALID_CELL_COLOR_RGB+',0.5)';
-					bgCtx.fill();
+				
+				row = checkBoard[i+progressIndex];
+				if(row && row[j]){
+					var cell = row[j];
+					if(cell.showThreat){
+						bgCtx.fillStyle = 'rgba('+INVALID_CELL_COLOR_RGB+',0.5)';
+						bgCtx.fill();
+					}
+					if(cell.checkPoint){
+						bgCtx.fillStyle = CHECK_POINT_COLOR;
+	                    bgCtx.fill();
+					}
 				}
 
 				if(player.invalid && player.invalidCol == j && player.invalidRow == i + progressIndex){
@@ -1071,10 +1138,12 @@ window.onload = function(){
 	}
 
 	function updatePieceStyle(piece){
-		piece.shape.style.opacity = piece.opacity;
-		if(piece.scale > 0){
-			//Note: svg transform origin is the root SVG element origin
-			piece.shape.setAttributeNS(null,'transform', 'scale('+piece.scale+') translate('+(piece.x / piece.scale)+','+(piece.y / piece.scale)+')');
+		if(piece.shape){
+			piece.shape.style.opacity = piece.opacity;
+			if(piece.scale > 0){
+				//Note: svg transform origin is the root SVG element origin
+				piece.shape.setAttributeNS(null,'transform', 'scale('+piece.scale+') translate('+(piece.x / piece.scale)+','+(piece.y / piece.scale)+')');
+			}
 		}
 	}
 
@@ -1248,6 +1317,7 @@ window.onload = function(){
 
 	var svgMakeUse;
 	var svgElem;
+	var svgPiecesLayer = null;
 	var svgCache = {};
 
 	function addSvgShape(piece){
@@ -1262,10 +1332,10 @@ window.onload = function(){
 		}
 		//Important: we assume element are always added to the top of the screen
 		//so they have to be prepended in order to be painted in the correct order
-		if(svgElem.firstChild && !piece.onTop){
-			svgElem.insertBefore(shape,svgElem.firstChild);
+		if(svgPiecesLayer.firstChild && !piece.onTop){
+			svgPiecesLayer.insertBefore(shape,svgPiecesLayer.firstChild);
 		}else{
-			svgElem.appendChild(shape);
+			svgPiecesLayer.appendChild(shape);
 		}
 
 		if(piece.shape){
@@ -1275,9 +1345,11 @@ window.onload = function(){
 	}
 
 	function removeSvgShape(piece){
-		svgCache[piece.type].push(piece.shape);
-		svgElem.removeChild(piece.shape);
-		piece.shape = null;
+		if(piece.shape){
+			svgCache[piece.type].push(piece.shape);
+			svgPiecesLayer.removeChild(piece.shape);
+			piece.shape = null;
+		}
 	}
 
 	function initSvg(){
@@ -1297,16 +1369,18 @@ window.onload = function(){
 		var defs = document.createElementNS (xmlns, "defs");
 		svgElem.appendChild (defs);
 
+		svgPiecesLayer = document.createElementNS (xmlns, "g");
+		svgElem.appendChild (svgPiecesLayer);
+
 		//For convenience, shape defs are given in a [10,10] rect, transformed to [CELL_SIZE,CELL_SIZE] in actual SVG
 		//We also transform the shape positions so that the piece origin is [OX,OY]
 		var OX = 5;
 		var OY = 8;
 
-		//ENEMY FILTER
+
 		makeFilter(ENEMY_FILTER);
 		makeCheckTextDef(CHECK_TEXT,'CHECK');
-		//makeCheckTextDef(CHECK_MATE,'Check Mate !');
-
+		makeGameOverScreen();
 
 		svgStyle(
 			makeDef(PAWN,[
@@ -1459,6 +1533,16 @@ window.onload = function(){
             def.innerHTML = text;
             defs.appendChild(def);
 		}
+
+		function makeGameOverScreen(){
+			gameOverScreen = document.createElementNS(xmlns, "g");
+			gameOverScreen.style.display = 'none';
+			svgElem.appendChild(gameOverScreen);
+
+			var rect = document.createElementNS(xmlns,'rect');
+			svgAttrs(rect, {x:0, y:0, width:'100%',height:'100%',fill:'rgba(0,0,0,0.5)'});
+			gameOverScreen.appendChild(rect);
+		}
 	}
 
 	function svgAttrs(el, attrs){
@@ -1565,6 +1649,8 @@ window.onload = function(){
 	};
 	// keyName => isDown bool
 	var keyBoolMap = {};
+	// keyName => int
+	var keys = {};
 	//Set up key listener
 	function onkey(isDown, e) {
 		if (!e) e = window.e;
@@ -1576,6 +1662,9 @@ window.onload = function(){
 			//only take events that represent an actual change
 			if(keyBoolMap[keyName] !== isDown){
 				keyBoolMap[keyName] = isDown;
+				if(typeof keys[keyName] == 'undefined'){
+					keys[keyName] = -1;
+				}
 				if(isDown){
 					if(keys[keyName]<1){
 						console.log('keyDown',keyName);
@@ -1600,7 +1689,7 @@ window.onload = function(){
 	document.onkeydown = function(e){
 		onkey(true, e);
 		//DEBUG
-		if(keyBoolMap.space){
+		if(keyBoolMap.esc){
 			raf = !raf;
 			console.log('debug toggle anim: ',raf);
 			if(raf){
