@@ -192,10 +192,16 @@ aa.add( 'die', 1,
     var ROOK = 'r';
     var BISHOP = 'b';
     var KNIGHT = 'k';
+    var LAND_MINE = 'l';
+    var WAR_BEAR = 'w';
+    var CASTLE = 'c';
+
     //other SCG ids
     var ENEMY_FILTER = 'ef';
     var CHECK_TEXT = 'ct';
 	var CHECK_GRADIENT = 'cg';
+
+
 
 	var DANGER = '*';
 	var CHECK_POINT = '#';
@@ -211,14 +217,14 @@ aa.add( 'die', 1,
 		drawSky();
 		onResize();
 
-		initCheckBoard(0);
+		initCheckBoard(5);
 
         tic();
 	}
 
 	function restart(){
 		//find we checkpoint we were at
-		var checkPointIndex = 0;
+		var checkPointIndex = checkPoints.length-1;
 		for(var i=0; i<checkPoints.length; i++){
 			if(progress < checkPoints[i]){
 				if(i>0){
@@ -255,7 +261,7 @@ aa.add( 'die', 1,
 			'   e    '
 		);
 
-		//1 first pawn
+		// first pawn
 		block(
 			{showThreat:'p'},
 			'',
@@ -268,7 +274,7 @@ aa.add( 'die', 1,
 			''
 		);
 
-		//2 scattered pawns
+		// scattered pawns
 		block(
 			'  pppp',
 			'  pppp',
@@ -280,7 +286,7 @@ aa.add( 'die', 1,
 			' p'
 		);
 
-		//3 pawn rows
+		// pawn rows
 		block(
 			'',
 			'pppppp',
@@ -292,7 +298,7 @@ aa.add( 'die', 1,
 			''
 		);
 
-		//4 triangle
+		// triangle
 		block(
 			'',
 			'pp   ppp',
@@ -304,7 +310,7 @@ aa.add( 'die', 1,
 			''
 		);
 
-		//5 sawtooth
+		// sawtooth
 		block(
 			'',
 			'   pp',
@@ -316,7 +322,7 @@ aa.add( 'die', 1,
 			''
 		);
 
-		//6 wedges
+		// wedges
 		block(
 			'',
 			'    ppp',
@@ -328,12 +334,12 @@ aa.add( 'die', 1,
 			''
 		);
 
+		//CHECK POINT 1
 		checkPoint();
 
-		//7 first rook
+		// first rook
 		block(
 			{showThreat:'r'},
-			'','','','','','',
 			'',
 			'   p',
 			'',
@@ -344,8 +350,9 @@ aa.add( 'die', 1,
 			''
 		);
 
-		//8 rook diag
+		// rook diag
 		block(
+			'',
 			'',
 			'r',
 			' r',
@@ -356,7 +363,21 @@ aa.add( 'die', 1,
 			'pppppp'
 		);
 
-		//9 rook labyrinth
+		// rook rows
+        block(
+            '',
+            '',
+            '',
+            '       p',
+            '   rp pr',
+            '',
+            '',
+            'p',
+            'r  p   p',
+            'p'
+        );
+
+		// rook labyrinth
 		block(
 			'',
 			' r     p',
@@ -368,7 +389,8 @@ aa.add( 'die', 1,
 			'ppppp  p'
 		);
 
-		checkPoint();
+		//CHECK POINT 2
+        checkPoint();
 
 		//10 first bishop
 		block(
@@ -420,6 +442,7 @@ aa.add( 'die', 1,
 			'pp.....p'
 		);
 
+		//CHECK POINT 3
 		checkPoint();
 
 		//14 first knight
@@ -438,7 +461,7 @@ aa.add( 'die', 1,
 		//15 knight rows
 		block(
 			'p',
-			'r...p',
+			'r.....p',
 			'',
 			'',
 			'......kk',
@@ -447,15 +470,89 @@ aa.add( 'die', 1,
 			''
 		);
 
+		//rooks bishop and knight
+        block(
+            'p   pppp',
+            'r    b r',
+            '   p b p',
+            '',
+            '',
+            '',
+            ' k',
+            '',
+            '',
+            ''
+        );
 
-		/*
+        //CHECK POINT 4
+        checkPoint();
 
-        //first rook
-        currentBlockIndex++;
-       	p(PAWN,3,3);
-       	p(ROOK,6,3);
-		*/
+        //first land mine
+        block(
+            {showThreat:'l'},
+            '',
+            '',
+            '',
+            '   l',
+            '',
+            '',
+            '',
+            ''
+        );
 
+        //land mines
+        block(
+            'l.llllll',
+            'l.l....l',
+            '..l.llll',
+            '.ll.l   ',
+            'l...l l ',
+            'l.lll l ',
+            'l.    l ',
+            'lllllll '
+        );
+
+		//land mines and pawns
+        block(
+            ' p  pll',
+            ' l p   l',
+            'lpl p p ',
+            '     lp',
+            'll ll l',
+            ' l  l',
+            '',
+            ''
+        );
+
+        //k,r,b,p,l
+        block(
+            '',
+            '   r',
+            ' kll',
+            '',
+            '',
+            ' l pl  b',
+            '       l',
+            '  p  l',
+            '',
+            '',
+            '',
+            '',
+            ''
+        );
+
+        //CHECK POINT 5
+        checkPoint();
+
+        block(
+            '',
+            'c',
+            '',
+            '',
+            '',
+            '',
+            ''
+        );
 
 		if(startCheckPointIndex === 0){
 			//Add player
@@ -568,6 +665,20 @@ aa.add( 'die', 1,
 			checkBoard[row][col] = {};
 		}
 		checkBoard[row][col].piece = piece;
+
+		//Walls
+		if(type == CASTLE){
+			for(var i=0; i< NUM_CELLS; i++){
+				if(i!=3 && i!=4){
+					if(!checkBoard[row][i]){
+                        checkBoard[row][i] = {};
+                    }
+                    checkBoard[row][i].wall = true;
+				}
+			}
+
+		}
+
 		return checkBoard[row][col];
 	}
 
@@ -735,39 +846,46 @@ aa.add( 'die', 1,
                 cell = {};
                 checkBoard[row][col] = cell;
             }
-
-			//can cell be taken ?
-			var threateningCell = getThreateningCell(row,col);
-			if(threateningCell){
-				//invalid position
-				player.invalid = true;
-                player.invalidCol = col;
-                player.invalidRow = row;
-                player.threateningPiece = threateningCell.piece;
-				col = oldCol;
-				row = oldRow;
-			}else{
-				player.invalid = false;
-				if(cell.piece){
-					//take the piece
-					destroyPiece(cell.piece);
+			if(!cell.wall){
+				//can cell be taken ?
+				var threateningCell = getThreateningCell(row,col);
+				if(threateningCell){
+					//invalid position
+					player.invalid = true;
+	                player.invalidCol = col;
+	                player.invalidRow = row;
+	                player.threateningPiece = threateningCell.piece;
+					col = oldCol;
+					row = oldRow;
+				}else{
+					player.invalid = false;
+					if(cell.piece){
+						//take the piece
+						destroyPiece(cell.piece);
+					}
+					//move piece on check board
+					oldCell.piece = null;
+					cell.piece = player;
 				}
-				//move piece on check board
-				oldCell.piece = null;
-				cell.piece = player;
+				player.oldCol = oldCol;
+				player.oldRow = oldRow;
+				player.anim = true;
+				player.animStartTime = now;
+				player.col = col;
+				player.row = row;
 			}
-			player.oldCol = oldCol;
-			player.oldRow = oldRow;
-			player.anim = true;
-			player.animStartTime = now;
-			player.col = col;
-			player.row = row;
 		}
 	}
 
 	function getThreateningCell(row,col){
+		var threateningCell;
+		//land mine
+		threateningCell = getCellWithPieceAt(row,col,LAND_MINE);
+		if(threateningCell){
+			return threateningCell;
+		}
 		//pawns
-		var threateningCell =
+		threateningCell =
 			getCellWithPieceAt(row+1,col-1,PAWN) ||
 			getCellWithPieceAt(row+1,col+1,PAWN);
 		if(threateningCell){
@@ -1520,39 +1638,71 @@ aa.add( 'die', 1,
 		svgStyle(
 			makeDef(ENEMY_KING,[
 				makePath(['M',[5,1],'L',[5,-2],'M',[4,-1],'L',[6,-1]], {'stroke-width':3}),
-				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[6,3],'L',[7,1],'Q',[5,0],[3,1],'L',[4,3],'L',[2,8]]),
+				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[6,3],'L',[7,1],'Q',[5,0],[3,1],'L',[4,3],'L',[2,8]])
 			]), PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
 		);
 		svgStyle(
 			makeDef(KNIGHT,[
-				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[7,6],'Q',[8,3],[7,0],'L',[6,1],'L',[5,1],'L',[2,4],'L',[3,5],'L',[5,4],'L',[2,8]]),
+				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[7,6],'Q',[8,3],[7,0],'L',[6,1],'L',[5,1],'L',[2,4],'L',[3,5],'L',[5,4],'L',[2,8]])
 			]),  PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
 		);
 		svgStyle(
 			makeDef(ROOK,[
-				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[6.5,3],'L',[8,2],'L',[8,0],'L',[7,0],'L',[7,1],'L',[6,1],'L',[6,0],'L',[4,0],'L',[4,1],'L',[3,1],'L',[3,0],'L',[2,0],'L',[2,2],'L',[3.5,3],'L',[2,8]]),
+				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[6.5,3],'L',[8,2],'L',[8,0],'L',[7,0],'L',[7,1],'L',[6,1],'L',[6,0],'L',[4,0],'L',[4,1],'L',[3,1],'L',[3,0],'L',[2,0],'L',[2,2],'L',[3.5,3],'L',[2,8]])
 			]),  PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
 		);
 		svgStyle(
 			makeDef(BISHOP,[
 				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[6,4],'Q',[8,1.1],[5,0],'Q',[2,1.1],[4,4],'L',[2,8]]),
 				makeCircle(5,0,0.7),
-                makePath(['M',[3.8,0.8],'L',[4.4,2.5]], {'stroke-width':2}),
+                makePath(['M',[3.8,0.8],'L',[4.4,2.5]], {'stroke-width':2})
 			]),  PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
 		);
+		svgStyle(
+            makeDef(WAR_BEAR,[
+                makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[8.5,6],'L',[7,7],'L',[7,5],'L',[6,6],'L',[5,4.5],'L',[4,6],'L',[3,5],'L',[3,7],'L',[1.5,6],'L',[2,8]])
+            ]),  PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
+        );
+        svgStyle(
+            makeDef(LAND_MINE,[
+                makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[8.5,6],'L',[7,7],'L',[7,5],'L',[6,6],'L',[5,4.5],'L',[4,6],'L',[3,5],'L',[3,7],'L',[1.5,6],'L',[2,8]])
+            ]),  PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
+        );
 		//HERO_KING
 		svgStyle(
 			makeDef(HERO_KING,[
 				makePath(['M',[5,1],'L',[5,-2],'M',[4,-1],'L',[6,-1]], {'stroke-width':3}),
-				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[6,3],'L',[7,1],'Q',[5,0],[3,1],'L',[4,3],'L',[2,8]]),
+				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[6,3],'L',[7,1],'Q',[5,0],[3,1],'L',[4,3],'L',[2,8]])
 			]), '#002', '#333', 0
 		);
 
-		function makeDef(id, shapes){
+		OX = 2.5;
+		OY = 50;
+		svgStyle(
+            makeDef(CASTLE,[
+                makePath(['M',[25,30],'L',[50,30],'L',[50,5],
+                        'L',[45,5],'L',[45,10],'L',[40,10],'L',[40,5],
+                        'L',[35,5],'L',[35,10],'L',[30,10],'L',[30,5],
+                        'L',[25,5],'L',[25,30]
+                ]),
+                makePath(['M',[0,50],'L',[0,50],'L',[27.5,50],'L',[27.5,35],'L',[47.5,35],'L',[47.5,50],
+                    'L',[75,50],'L',[75,20],'L',[70,20],'L',[70,25],
+                    'L',[65,25],'L',[65,20],'L',[60,20],'L',[60,25],
+                    'L',[55,25],'L',[55,20],'L',[50,20],'L',[50,25],
+                    'L',[45,25],'L',[45,20],'L',[40,20],'L',[40,25],
+                    'L',[35,25],'L',[35,20],'L',[30,20],'L',[30,25],
+                    'L',[25,25],'L',[25,20],'L',[20,20],'L',[20,25],
+                    'L',[15,25],'L',[15,20],'L',[10,20],'L',[10,25],
+                    'L',[ 5,25],'L',[ 5,20],'L',[ 0,20],'L',[ 0,50]
+                ])
+            ],true), PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
+        );
+
+		function makeDef(id, shapes, skipShadow){
 			var def = document.createElementNS (xmlns, "g");
 			def.setAttributeNS (null, "id", id);
 
-			def.appendChild(makeShadow());
+			if(!skipShadow) def.appendChild(makeShadow());
 			for(var i=0; i<shapes.length; i++){
 				var shape = shapes[i];
 				shape.setAttributeNS(null,'x',-CELL_SIZE/2);
