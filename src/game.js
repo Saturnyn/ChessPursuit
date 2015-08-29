@@ -59,6 +59,7 @@ window.onload = function(){
 
 	var gameOverScreen = null;
 	var gameIsOver = false;
+	var autoMove = false;
     var homeScreen = false;
     var progress = 0;	//expressed as a number of rows
     var progressPerSec = 1; //1
@@ -120,13 +121,14 @@ window.onload = function(){
 		initCheckBoard(checkPointIndex);
 		//prepare next update
 		lastTime = null;
+		topRowDisplayed = -1;
 	}
 
 	function initCheckBoard(startCheckPointIndex){
 		if(checkBoard){
 			destroyCheckBoard();
 		}
-		checkBoard = {};
+		checkBoard = [];
 		checkPoints = [0];
 		var CHECK_POINT_HEIGHT = 5;
 		var currentRowIndex = 0;
@@ -207,8 +209,8 @@ window.onload = function(){
 		//6 wedges
 		block(
 			'',
-			'     ppp',
-			'      p',
+			'    ppp',
+			'     p',
 			'ppp',
 			' p   ppp',
 			'      p',
@@ -221,7 +223,8 @@ window.onload = function(){
 		//7 first rook
 		block(
 			{showThreat:'r'},
-			'   ',
+			'','','','','','',
+			'',
 			'   p',
 			'',
 			'   r',
@@ -429,7 +432,7 @@ window.onload = function(){
 		for(var row in checkBoard){
 			if(checkBoard[row]){
 				for(var col in checkBoard[row]){
-					var cell = checkBoard[col][row];
+					var cell = checkBoard[row][col];
 					if(cell && cell.piece){
 						removeSvgShape(cell.piece);
 					}
@@ -847,9 +850,24 @@ window.onload = function(){
 			progress += progressPerSec * (now-lastTime) * MS_TO_S;
 		}
 
-		if(player.row < progress - 1){
-			setGameIsOver(true);
-			return;
+		if(player.row < progress - 0.9){
+			//player out of view
+			if(autoMove){
+				// auto move if possible
+                if(!getThreateningCell(player.row+1, player.col)){
+                    movePlayer(player.row+1, player.col);
+                }else if(!getThreateningCell(player.row+1, player.col+1)){
+                    movePlayer(player.row+1, player.col+1);
+                }else if(!getThreateningCell(player.row+1, player.col-1)){
+                    movePlayer(player.row+1, player.col+1);
+                }else{
+                    setGameIsOver(true);
+                    return;
+                }
+			}else{
+				setGameIsOver(true);
+			}
+
 		}
 
 		//update checkboard based on progress
@@ -1342,6 +1360,7 @@ window.onload = function(){
 			throw new Error();
 		}
 		piece.shape = shape;
+		shape.style.filter = 'none';
 	}
 
 	function removeSvgShape(piece){
@@ -1542,6 +1561,34 @@ window.onload = function(){
 			var rect = document.createElementNS(xmlns,'rect');
 			svgAttrs(rect, {x:0, y:0, width:'100%',height:'100%',fill:'rgba(0,0,0,0.5)'});
 			gameOverScreen.appendChild(rect);
+
+			var text = document.createElementNS (xmlns, 'text');
+			svgAttrs(text,{
+				'x': '50%',
+				'y': '50%',
+				'font-size':'48px',
+				'fill': 'orange',
+				'stroke': 'red',
+				'stroke-width':'2px',
+				'text-anchor': 'middle',
+				'font-family':'Impact'
+			});
+			text.innerHTML = 'CHECKMATE !';
+			gameOverScreen.appendChild(text);
+
+			text = document.createElementNS (xmlns, 'text');
+            svgAttrs(text,{
+                'x': '50%',
+                'y': '60%',
+                'font-size':'22px',
+                'fill': 'white',
+                'stroke': 'black',
+                'stroke-width':'1px',
+                'text-anchor': 'middle',
+                'font-family':'Impact'
+            });
+            text.innerHTML = 'Press <tspan style="fill:orange;">SPACE</tspan> to restart at last checkpoint';
+            gameOverScreen.appendChild(text);
 		}
 	}
 
