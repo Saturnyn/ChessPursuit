@@ -4,6 +4,7 @@ window.onload = function(){
 	var win = window;
 	var document = win.document;
 	var body = document.body;
+	var root = null;
 	var Math = win.Math;
 
 	var PI = Math.PI;
@@ -30,22 +31,14 @@ window.onload = function(){
 	var screenHeight;
 	var screenMinSize;
 
-	var bgCanvas = makeCanvas(SIZE, SIZE);
+	var bgCanvas = makeCanvas(SIZE, SIZE, 'bg');
 	var bgCtx = getContext(bgCanvas);
 
-	var shadowCanvas = makeCanvas(SIZE, SIZE);
+	var shadowCanvas = makeCanvas(SIZE, SIZE, 'shadow');
     var shadowCtx = getContext(shadowCanvas);
 
-	var skyCanvas = makeCanvas(SIZE, 2*SIZE);
+	var skyCanvas = makeCanvas(SIZE, 2*SIZE,'sky');
     var skyCtx = getContext(skyCanvas);
-
-	window.onresize = onResize();
-	function onResize(){
-		screenWidth = win.innerWidth;
-		screenHeight = win.innerHeight;
-		bgCanvas.width = SIZE;
-		bgCanvas.height = SIZE + HORIZON_Y;
-	}
 
 
 
@@ -73,6 +66,20 @@ window.onload = function(){
 	var playerAnimDuration = 0.05;
 	var playerInvalidDuration = 0.5;
 
+	var pressSpaceText = null;
+	var introScreen = null;
+    var intro = true;
+	var introStartTime;
+	var introDurationSec = 5;
+	var perspectiveProgress = 0;
+	var introProgress = 0;
+	var introStep = -1;
+
+	var dialog;
+	var dialogSpeakerText;
+	var dialogText;
+	var dialogHint;
+
 	var checkText;
 
     //pieces id (used in SVG and checkboard)
@@ -97,20 +104,33 @@ window.onload = function(){
 	var CHECK_POINT = '#';
 
 	//------------------------------------------------------------------------------------------------------------------
-	// main loop
+	// initialization
 	//------------------------------------------------------------------------------------------------------------------
 
 	function init(){
-		body.appendChild(bgCanvas);
+		root = document.createElement('div');
+		root.id = 'root';
+		body.appendChild(root);
+		var style = root.style;
+		style.position = 'absolute';
+		style.left = '50%';
+		style.top = '0';
+		style.marginLeft = (-SIZE/2)+'px ';
+
+		initCheckBoardCanvas();
+		initSkyCanvas();
 		initSvg();
 		initShadowCanvas();
-		drawSky();
-		onResize();
 
-		initCheckBoard(5);
+		initCheckBoard(0);
 
         tic();
 	}
+
+
+	//------------------------------------------------------------------------------------------------------------------
+	// checkboard management
+	//------------------------------------------------------------------------------------------------------------------
 
 	function restart(){
 		//find we checkpoint we were at
@@ -141,14 +161,18 @@ window.onload = function(){
 
 		//0 TODO: intro: first pawn
 		block(
+			{intro:true},
+			'','','',
+			'  re r',
+			'  pppp',
 			'',
 			'',
 			'',
 			'',
 			'',
 			'',
-			'pppppppp',
-			'   e    '
+			'',
+			'kkkkkkkk'
 		);
 
 		// first pawn
@@ -446,8 +470,8 @@ window.onload = function(){
 
 		if(startCheckPointIndex === 0){
 			//Add player
-			player = addPieceAt(HERO_KING, 5, 3).piece;
-			progress = 0;
+			player = addPieceAt(HERO_KING, 4, 4).piece;
+			progress = 2; //hide starting pawn row
 		}else{
 			progress = checkPoints[startCheckPointIndex];
 			player = addPieceAt(HERO_KING, progress, 3).piece;
@@ -494,12 +518,15 @@ window.onload = function(){
 							var char = row.charAt(j);
 							if(char!==' ' && char!=='.'){
 								var lowerChar = char.toLowerCase();
-								addPieceAt(lowerChar, currentRowIndex, j);
+								var pieceCell = addPieceAt(lowerChar, currentRowIndex, j);
 								if(options.showThreat == lowerChar){
 									showThreatCell = checkBoard[currentRowIndex][j];
 								}
 								if(char != lowerChar){
 									//TODO: allied pieces
+								}
+								if(options.intro){
+									pieceCell.piece.intro = true;
 								}
 							}
 						}
@@ -538,8 +565,6 @@ window.onload = function(){
 		}
 	}
 
-
-
 	function addPieceAt(type, row, col){
 		var piece = {
 			shape: null,
@@ -570,144 +595,6 @@ window.onload = function(){
 		}
 
 		return checkBoard[row][col];
-	}
-
-	//input
-	var KEY_LATENCY = 6;
-	var KEY_DONE = -1;
-	var keysBlockedUntilAllUp = false;
-	var mouse = {};
-	var mouseRow = -1;
-	var mouseCol = -1;
-	function processInput(){
-		if(topRowDisplayed <= 0){
-			return;
-		}
-		if(player.anim){
-			//can't during animation
-			return;
-		}
-
-		var dx = 0;
-        var dy = 0;
-		if(!keysBlockedUntilAllUp){
-
-			//read keys that were just released or that were pressed just a few frames ago
-			//this leaves some time for a combination (ie: up+right)
-			if(keys.down == KEY_LATENCY || keys.down === 0){
-				dy = -1;
-			}
-			if(keys.up == KEY_LATENCY || keys.up === 0){
-				dy = 1;
-			}
-			if(keys.left == KEY_LATENCY || keys.left === 0){
-				dx = -1;
-			}
-			if(keys.right == KEY_LATENCY || keys.right === 0){
-				dx = 1;
-			}
-
-			if(dx || dy){
-				//look for a combo: another key that was pressed during the latency
-				if(!dx){
-					if(keys.left <= KEY_LATENCY && keys.left > 0){
-						dx = -1;
-					}
-					if(keys.right <= KEY_LATENCY && keys.right > 0){
-						dx = 1;
-					}
-				}else{
-					if(keys.up <= KEY_LATENCY && keys.up > 0){
-						dy = 1;
-					}
-					if(keys.down <= KEY_LATENCY && keys.down > 0){
-						dy = -1;
-					}
-				}
-				//console.log(keys,dx,dy);
-				movePlayer(player.row+dy, player.col+dx);
-
-				keysBlockedUntilAllUp = true;
-			}
-		}
-
-		var keyName;
-		if(keysBlockedUntilAllUp){
-			var allUp = true;
-			for(keyName in keyBoolMap){
-				if(keyBoolMap[keyName]){
-					allUp = false;
-					break;
-				}
-			}
-			keysBlockedUntilAllUp = !allUp;
-		}
-
-		//update key pressed counters
-		for(keyName in keys){
-			if(keys[keyName] >= 1){
-				keys[keyName]++;
-			}else if(keys[keyName]>KEY_DONE){
-				keys[keyName]--;
-			}
-		}
-
-		// no keyboard input => check mouse
-		if(!player.anim && mouse.x > 0 && mouse.x<SIZE && mouse.y > HORIZON_Y && mouse.y < SIZE + HORIZON_Y ){
-			/*
-			dx = 0;
-			dy = 0;
-			var angle = Math.atan2(mouse.y-player.y,mouse.x-player.x)*180/PI;
-			var part = Math.floor(angle / 22.5); //[-8,7]
-			if(part <= -6 || part >= 5){
-				dx = -1;
-			}else if(part >= -3 && part <=2){
-				dx = 1;
-			}
-			if(part <= -2 && part >= -7){
-				dy = 1;
-			}else if(part >= 1 && part <=6){
-				dy = -1;
-			}
-
-			mouseRow = player.row + dy;
-			mouseCol = player.col + dx;
-			console.log('mouse part',part,'dx',dx,'dy',dy, Math.round(angle)+'deg');
-			if(mouse.left){
-				mouse.left = false;
-				movePlayer(mouseRow, mouseCol);
-			}
-			*/
-			var mouseX = mouse.x/SIZE;
-			var mouseY = (mouse.y-HORIZON_Y)/SIZE;
-			reverseProject(mouseX, mouseY);
-			mouseCol = Math.floor(reverseProject.res.x * NUM_CELLS);
-			mouseRow = Math.floor(reverseProject.res.y * NUM_CELLS + progress);
-			dx = mouseCol - player.col;
-			dy = mouseRow - player.row;
-			if(dx > 1){
-				dx = 1;
-			}else if(dx < -1){
-				dx = -1;
-			}
-			if(dy > 1){
-				dy = 1;
-			}else if(dy < -1){
-				dy = -1;
-			}
-			mouseRow = player.row+dy;
-			mouseCol = player.col+dx;
-			if(mouse.left && (dx || dy)){
-				mouse.left = false;
-				movePlayer(mouseRow,mouseCol);
-			}
-
-			//console.log(mouseX,mouseY,reverseProject.res,mouseCol,mouseRow);
-
-		}else{
-			mouseCol = -1;
-			mouseRow = -1;
-		}
 	}
 
 	function movePlayer(row,col){
@@ -918,6 +805,10 @@ window.onload = function(){
 		}
 	}
 
+	//------------------------------------------------------------------------------------------------------------------
+    //  game loop
+    //------------------------------------------------------------------------------------------------------------------
+
 
 	function tic(){
 
@@ -933,9 +824,19 @@ window.onload = function(){
 			if(homeScreen){
 				renderHomeScreen();
 			}else{
-				processInput();
-				update();
-
+				if(!intro){
+					processInput();
+					update();
+				}else{
+					if(introStep >= 0){
+						if(keys.space === 0){
+							keys.space = -1;
+                            introStep ++;
+                            introStartTime = null;
+                        }
+					}
+					updateIntro();
+				}
 				//var t = now;
 				render();
 				//console.log('renderTime', now-t);
@@ -961,6 +862,148 @@ window.onload = function(){
 			}
 		}
 	}
+
+	//------------------------------------------------------------------------------------------------------------------
+    //  game update
+    //------------------------------------------------------------------------------------------------------------------
+
+	//input
+    var KEY_LATENCY = 6;
+    var KEY_DONE = -1;
+    var keysBlockedUntilAllUp = false;
+    var mouse = {};
+    var mouseRow = -1;
+    var mouseCol = -1;
+    function processInput(){
+        if(topRowDisplayed <= 0){
+            return;
+        }
+        if(player.anim || intro){
+            //can't during animation
+            return;
+        }
+
+        var dx = 0;
+        var dy = 0;
+        if(!keysBlockedUntilAllUp){
+
+            //read keys that were just released or that were pressed just a few frames ago
+            //this leaves some time for a combination (ie: up+right)
+            if(keys.down == KEY_LATENCY || keys.down === 0){
+                dy = -1;
+            }
+            if(keys.up == KEY_LATENCY || keys.up === 0){
+                dy = 1;
+            }
+            if(keys.left == KEY_LATENCY || keys.left === 0){
+                dx = -1;
+            }
+            if(keys.right == KEY_LATENCY || keys.right === 0){
+                dx = 1;
+            }
+
+            if(dx || dy){
+                //look for a combo: another key that was pressed during the latency
+                if(!dx){
+                    if(keys.left <= KEY_LATENCY && keys.left > 0){
+                        dx = -1;
+                    }
+                    if(keys.right <= KEY_LATENCY && keys.right > 0){
+                        dx = 1;
+                    }
+                }else{
+                    if(keys.up <= KEY_LATENCY && keys.up > 0){
+                        dy = 1;
+                    }
+                    if(keys.down <= KEY_LATENCY && keys.down > 0){
+                        dy = -1;
+                    }
+                }
+                //console.log(keys,dx,dy);
+                movePlayer(player.row+dy, player.col+dx);
+
+                keysBlockedUntilAllUp = true;
+            }
+        }
+
+        var keyName;
+        if(keysBlockedUntilAllUp){
+            var allUp = true;
+            for(keyName in keyBoolMap){
+                if(keyBoolMap[keyName]){
+                    allUp = false;
+                    break;
+                }
+            }
+            keysBlockedUntilAllUp = !allUp;
+        }
+
+        //update key pressed counters
+        for(keyName in keys){
+            if(keys[keyName] >= 1){
+                keys[keyName]++;
+            }else if(keys[keyName]>KEY_DONE){
+                keys[keyName]--;
+            }
+        }
+
+        // no keyboard input => check mouse
+        if(!player.anim && mouse.x > 0 && mouse.x<SIZE && mouse.y > HORIZON_Y && mouse.y < SIZE + HORIZON_Y ){
+            /*
+            dx = 0;
+            dy = 0;
+            var angle = Math.atan2(mouse.y-player.y,mouse.x-player.x)*180/PI;
+            var part = Math.floor(angle / 22.5); //[-8,7]
+            if(part <= -6 || part >= 5){
+                dx = -1;
+            }else if(part >= -3 && part <=2){
+                dx = 1;
+            }
+            if(part <= -2 && part >= -7){
+                dy = 1;
+            }else if(part >= 1 && part <=6){
+                dy = -1;
+            }
+
+            mouseRow = player.row + dy;
+            mouseCol = player.col + dx;
+            console.log('mouse part',part,'dx',dx,'dy',dy, Math.round(angle)+'deg');
+            if(mouse.left){
+                mouse.left = false;
+                movePlayer(mouseRow, mouseCol);
+            }
+            */
+            var mouseX = mouse.x/SIZE;
+            var mouseY = (mouse.y-HORIZON_Y)/SIZE;
+            reverseProject(mouseX, mouseY);
+            mouseCol = Math.floor(reverseProject.res.x * NUM_CELLS);
+            mouseRow = Math.floor(reverseProject.res.y * NUM_CELLS + progress);
+            dx = mouseCol - player.col;
+            dy = mouseRow - player.row;
+            if(dx > 1){
+                dx = 1;
+            }else if(dx < -1){
+                dx = -1;
+            }
+            if(dy > 1){
+                dy = 1;
+            }else if(dy < -1){
+                dy = -1;
+            }
+            mouseRow = player.row+dy;
+            mouseCol = player.col+dx;
+            if(mouse.left && (dx || dy)){
+                mouse.left = false;
+                movePlayer(mouseRow,mouseCol);
+            }
+
+            //console.log(mouseX,mouseY,reverseProject.res,mouseCol,mouseRow);
+
+        }else{
+            mouseCol = -1;
+            mouseRow = -1;
+        }
+    }
 
 	function update(){
 		now = Date.now();
@@ -1035,6 +1078,77 @@ window.onload = function(){
 		lastTime = now;
 	}
 
+
+	//------------------------------------------------------------------------------------------------------------------
+    //  intro
+    //------------------------------------------------------------------------------------------------------------------
+
+	function updateIntro(){
+		console.log(introStep);
+		var now = Date.now();
+		if(introStep == -1){
+			shadowCanvas.style.opacity = 0;
+			skyCanvas.style.opacity = 0;
+			perspectiveProgress = 0;
+            //force a refresh for pieces
+            update();
+            lastTime = null;
+            introStep = 0;
+		}else if(introStep === 0){
+			//Waiting for space
+		}else if(introStep == 1){
+			//showDialog(true,'Surrender Black King, your army is defeated, and your Queen is mine !');
+		}else if(introStep == 2){
+            //bring pawns in
+        }else if(introStep == 3){
+            //showDialog(true,'You are surrounded. Admit defeat now and I shall be merciful.');
+        }else if(introStep == 4){
+            //sword ?
+        }else if(introStep == 5){
+            //showDialog(true, 'All units, capture him, and I want him alive !');
+        }else if(introStep == 6){
+            //units move
+        }else if(introStep == 7){
+            //showDialog(false, 'You won\'t get away with this !');
+        }else if(introStep == 8){
+			//perspective switch
+			if(!introStartTime){
+				introStartTime = now;
+			}
+			introProgress = (now - introStartTime) / (4 * 1000);
+			if(introProgress > 1){
+                introStep = 9;
+            }else{
+                introProgress = Math.sin(introProgress*PI/2);
+
+                perspectiveProgress = (introProgress - 0.2) / 0.6;
+                if(perspectiveProgress < 0){
+                    perspectiveProgress = 0;
+                }else if(perspectiveProgress > 1){
+                    perspectiveProgress = 1;
+                }
+                 shadowCanvas.style.opacity = perspectiveProgress;
+                if(introProgress>0.8){
+                    introScreen.style.opacity = (1-introProgress)/0.2;
+                    skyCanvas.style.opacity = 1 - introScreen.style.opacity;
+                }
+            }
+        }
+
+        if(introStep == 9){
+           intro = false;
+           perspectiveProgress = 1;
+           introScreen.style.display = 'none';
+           shadowCanvas.style.opacity = 1;
+           skyCanvas.style.opacity = 1;
+        }
+	}
+
+
+	//------------------------------------------------------------------------------------------------------------------
+	//  RENDER
+	//------------------------------------------------------------------------------------------------------------------
+
 	var BG_COLOR = '#193441';
 	var CELL_COLOR_1 = '#D1DBBD';
 	var CELL_COLOR_2 = '#3E606F';
@@ -1046,7 +1160,8 @@ window.onload = function(){
     var CHECK_POINT_COLOR = 'rgba(93, 255, 182, 0.56)';
 
 	function render(){
-		// SVG ---
+		//console.log('render',perspectiveProgress,intro);
+		// SVG ------------------------------------------------------------------------------------------------------
 		 
 		//update pieces
 		var pieceAfterPlayer;
@@ -1165,7 +1280,7 @@ window.onload = function(){
 
 
 
-		// CANVAS -----
+		// CANVAS ------------------------------------------------------------------------------------------------------
 
 		clearCanvas(bgCtx);
 
@@ -1230,26 +1345,8 @@ window.onload = function(){
 					bgCtx.fill();
 				}
 			}
-			/*
-			//Draw checkboard line
-			if( (i+progressIndex) % NUM_CELLS === 0){
-				project(0, (i+di)/NUM_CELLS, p1);
-            	project(1, (i+di)/NUM_CELLS, p2);
-            	bgCtx.beginPath();
-            	bgCtx.moveTo(p1.x*SIZE,p1.y*SIZE);
-            	bgCtx.lineTo(p2.x*SIZE,p2.y*SIZE);
-            	bgCtx.closePath();
-            	bgCtx.strokeStyle = '#333';
-                bgCtx.strokeWidth = '1';
-            	bgCtx.stroke();
-			}
-			*/
 		}
-
-
-		//Draw sky
 		bgCtx.restore();
-        bgCtx.drawImage(skyCanvas,0,0);
 	}
 
 	var THRESHOLD_DOWN = -0.02;
@@ -1283,6 +1380,10 @@ window.onload = function(){
 		}
 	}
 
+	//------------------------------------------------------------------------------------------------------------------
+    //  projections
+    //------------------------------------------------------------------------------------------------------------------
+
 	// For y, projection of a [0,2] position in logical chessboard into a [1,0] position inside the canvas
 	// we want: 0->1 and 2->1. You don't want to know how I got those coeff. Don't ask.
 	// http://fooplot.com/#W3sidHlwZSI6MCwiZXEiOiItKDMvMTYpKngqeCsoMC8xNikqeCsxIiwiY29sb3IiOiIjMDAwMDAwIn0seyJ0eXBlIjoxMDAwLCJ3aW5kb3ciOlsiLTYuNiIsIjYuNCIsIi0zLjkyIiwiNC4wOCJdfV0-
@@ -1294,7 +1395,7 @@ window.onload = function(){
 	var B_S = 0/16;
 	var C_S = 1;
 
-	// [0,2] in logical chessboard => [0,1] in canvas coordinates
+	// [0,2] in logical chessboard => [0,1] in canvas coordinates (y reversed)
 	project.res = {};
 	function project(x, y, res){
 		res = res || project.res;
@@ -1303,6 +1404,13 @@ window.onload = function(){
 		res.scaleX = quadraticEq(y, A_S, B_S, C_S);
 		res.scaleY = res.scaleX;
 		res.x = (1-res.scaleX)/2 + x*res.scaleX;
+
+		if(intro){
+			res.x = perspectiveProgress * res.x + (1-perspectiveProgress) * x;
+			res.y = perspectiveProgress * res.y + (1-perspectiveProgress) * (1-y);
+			res.scaleX = perspectiveProgress * res.scaleX + (1-perspectiveProgress) * 1;
+			res.scaleY = res.scaleX;
+		}
 
 		return res;
 	}
@@ -1334,6 +1442,15 @@ window.onload = function(){
 		}
 	}
 
+	//------------------------------------------------------------------------------------------------------------------
+    //  canvases
+    //------------------------------------------------------------------------------------------------------------------
+
+	function initCheckBoardCanvas(){
+		root.appendChild(bgCanvas);
+        bgCanvas.width = SIZE;
+        bgCanvas.height = SIZE + HORIZON_Y;
+	}
 
 	function initShadowCanvas(){
 		var ctx = shadowCtx;
@@ -1352,9 +1469,13 @@ window.onload = function(){
 
 		shadowCanvas.style.top = HORIZON_Y+'px';
 		shadowCanvas.style.pointerEvents = 'none';
-		body.appendChild(shadowCanvas);
+		root.appendChild(shadowCanvas);
 	}
-	function drawSky(){
+	function initSkyCanvas(){
+		var shadowSize = SIZE * 0.02;
+    	skyCanvas.width = SIZE;
+    	skyCanvas.height = HORIZON_Y + shadowSize;
+
 		var ctx = skyCtx;
 		ctx.clearRect(0,0,SIZE,SIZE);
 
@@ -1407,7 +1528,6 @@ window.onload = function(){
 
 		ctx.save();
 		ctx.translate(0,HORIZON_Y);
-		var shadowSize = SIZE * 0.02;
 		var grd = ctx.createLinearGradient(0,0,0,shadowSize);
 		var c = 'rgba(10,20,25,';
 		var c2 = ')';
@@ -1417,6 +1537,8 @@ window.onload = function(){
 		ctx.fillStyle = grd;
         ctx.fillRect(0, 0, SIZE, shadowSize);
 		ctx.restore();
+
+		root.appendChild(skyCanvas);
 
 		/*
 		skyCtx.beginPath();
@@ -1433,7 +1555,7 @@ window.onload = function(){
 			skyCtx.lineTo(SIZE,y2);
 		}
 		skyCtx.stroke();
-		document.body.appendChild(skyCanvas);
+		root.appendChild(skyCanvas);
 		*/
 
 		/*
@@ -1501,25 +1623,27 @@ window.onload = function(){
 		svgElem.setAttributeNS(null, "viewBox", "0 0 " + boxWidth + " " + boxHeight);
 		svgElem.setAttributeNS(null, "width", boxWidth);
 		svgElem.setAttributeNS(null, "height", boxHeight);
-		document.body.appendChild (svgElem);
+		root.appendChild (svgElem);
 
 		var defs = document.createElementNS (xmlns, "defs");
 		svgElem.appendChild (defs);
 
+		makeIntroScreen();
+		//make pieces layer
 		svgPiecesLayer = document.createElementNS (xmlns, "g");
 		svgElem.appendChild (svgPiecesLayer);
-
-		//For convenience, shape defs are given in a [10,10] rect, transformed to [CELL_SIZE,CELL_SIZE] in actual SVG
-		//We also transform the shape positions so that the piece origin is [OX,OY]
-		var OX = 5;
-		var OY = 8;
-
 
 		makeFilter(ENEMY_FILTER);
 		makeCheckTextDef(CHECK_TEXT,'CHECK');
 		makeGameOverScreen();
+		makePressSpaceText();
 
-		svgStyle(
+
+		//For convenience, shape defs are given in a [10,10] rect, transformed to [CELL_SIZE,CELL_SIZE] in actual SVG
+        //We also transform the shape positions so that the piece origin is [OX,OY]
+        var OX = 5;
+        var OY = 8;
+        svgStyle(
 			makeDef(PAWN,[
 				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[5,3],'L',[2,8]]),
 				makeCircle(5,3,2)
@@ -1632,6 +1756,17 @@ window.onload = function(){
 			return circle;
 		}
 
+		function makeRect(x, y, w, h){
+            var rect = document.createElementNS (xmlns, "rect");
+            svgAttrs(rect, {
+                x: svgFloat(cx - OX),
+                y: svgFloat(cy - OY),
+                w: svgFloat(w),
+                h: svgFloat(h)
+            });
+            return rect;
+        }
+
 		function makeEllipse(cx, cy, rx, ry){
 			var ellipse = document.createElementNS (xmlns, "ellipse");
 			svgAttrs(ellipse, {
@@ -1740,6 +1875,45 @@ window.onload = function(){
             text.innerHTML = 'Press <tspan style="fill:orange;">SPACE</tspan> to restart at last checkpoint';
             gameOverScreen.appendChild(text);
 		}
+
+		function makeIntroScreen(){
+            introScreen = document.createElementNS(xmlns, "g");
+            svgElem.appendChild(introScreen);
+
+            var rect = document.createElementNS(xmlns,'rect');
+            svgAttrs(rect, {x:0, y:0, width:'100%',height:HORIZON_Y,fill:BG_COLOR,stroke:'#000'});
+            introScreen.appendChild(rect);
+
+            var text = document.createElementNS (xmlns, 'text');
+            svgAttrs(text,{
+                'x': '50%',
+                'y': '60',
+                'font-size':'48px',
+                'fill': 'orange',
+                'stroke': 'red',
+                'stroke-width':'2px',
+                'text-anchor': 'middle',
+                'font-family':'Impact'
+            });
+            text.innerHTML = 'CHESS<tspan style="font-style:italic;">PURSUIT</tspan>';
+            introScreen.appendChild(text);
+        }
+
+        function makePressSpaceText(){
+            pressSpaceText = document.createElementNS (xmlns, 'text');
+            svgAttrs(pressSpaceText,{
+                'x': '50%',
+                'y': HORIZON_Y+SIZE-10,
+                'font-size':'22px',
+                'fill': 'white',
+                'stroke': 'black',
+                'stroke-width':'1px',
+                'text-anchor': 'middle',
+                'font-family':'Impact'
+            });
+            pressSpaceText.innerHTML = 'Press <tspan style="fill:orange;">SPACE</tspan>';
+            svgElem.appendChild(pressSpaceText);
+        }
 	}
 
 	function svgAttrs(el, attrs){
@@ -1770,8 +1944,9 @@ window.onload = function(){
 	// canvas helper functions
 	//------------------------------------------------------------------------------------------------------------------
 
-	function makeCanvas(width, height){
+	function makeCanvas(width, height, id){
 		var canvas = document.createElement("canvas");
+		if(id) canvas.id = id;
 		canvas.width = width;
 		canvas.height = height;
 		return canvas;
