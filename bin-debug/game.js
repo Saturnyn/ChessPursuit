@@ -137,6 +137,8 @@ aa.add( 'die', 1,
 	var CELL_SIZE = SIZE/NUM_CELLS;
 	var NUM_CELLS_DISPLAYED = NUM_CELLS*2+3;
 
+	var DIALOG_MARGIN = 6;
+
 	var screenWidth;
 	var screenHeight;
 	var screenMinSize;
@@ -160,6 +162,11 @@ aa.add( 'die', 1,
 	var lastTime;
     var MS_TO_S = 1/1000;
 
+	var killCount = 0;
+	var checkMateCount = 0;
+	var checkCount = 0;
+
+	var winScreen = null;
 	var gameOverScreen = null;
 	var gameIsOver = false;
 	var autoMove = false;
@@ -171,6 +178,7 @@ aa.add( 'die', 1,
     var topRowDisplayed = -1;
     var raf = true;
     var removedPieces = [];
+    var lastRowIndex;
 
     var player = null;
 	var playerAnimDuration = 0.05;
@@ -185,7 +193,7 @@ aa.add( 'die', 1,
 	var introProgress = 0;
 	var introStep = -1;
 
-	var dialog;
+	var dialogBox;
 	var dialogSpeakerText;
 	var dialogText;
 	var dialogHint;
@@ -202,6 +210,7 @@ aa.add( 'die', 1,
     var LAND_MINE = 'l';
     var WAR_BEAR = 'w';
     var CASTLE = 'c';
+    var QUEEN = 'q';
 
     //other SCG ids
     var ENEMY_FILTER = 'ef';
@@ -258,6 +267,7 @@ aa.add( 'die', 1,
 		//prepare next update
 		lastTime = null;
 		topRowDisplayed = -1;
+		checkMateCount++;
 	}
 
 	function initCheckBoard(startCheckPointIndex){
@@ -273,9 +283,8 @@ aa.add( 'die', 1,
 		block(
 			{intro:true},
 			'','','',
-			'  re r',
-			'  pppp',
-			'',
+			intro ? '  reqr' : '',
+			intro ? '   kk' : '',
 			'',
 			'',
 			'',
@@ -577,10 +586,11 @@ aa.add( 'die', 1,
             '',
             ''
         );
+        lastRowIndex = currentRowIndex;
 
 		if(startCheckPointIndex === 0){
 			//Add player
-			player = addPieceAt(HERO_KING, 4, 4).piece;
+			player = addPieceAt(HERO_KING, 5, 4).piece;
 			progress = 2; //hide starting pawn row
 		}else{
 			progress = checkPoints[startCheckPointIndex];
@@ -744,11 +754,13 @@ aa.add( 'die', 1,
 	                player.threateningPiece = threateningCell.piece;
 					col = oldCol;
 					row = oldRow;
+					checkCount++;
 				}else{
 					player.invalid = false;
 					if(cell.piece){
 						//take the piece
 						destroyPiece(cell.piece);
+						killCount++;
 					}
 					//move piece on check board
 					oldCell.piece = null;
@@ -760,6 +772,10 @@ aa.add( 'die', 1,
 				player.animStartTime = now;
 				player.col = col;
 				player.row = row;
+
+				if(row >= lastRowIndex){
+					setGameIsOver(true, true);
+				}
 			}
 		}
 	}
@@ -960,15 +976,21 @@ aa.add( 'die', 1,
 		}
 	}
 
-	function setGameIsOver(val){
-		if(val != gameIsOver){
-			gameIsOver = val;
+	function setGameIsOver(val, win){
+		if(win){
+			raf = false;
+			gameIsOver = true;
+			winScreen.style.display = 'block';
+		}else{
+			if(val != gameIsOver){
+				gameIsOver = val;
 
-			if(gameIsOver){
-				gameOverScreen.style.display = 'block';
-			}else{
-				gameOverScreen.style.display = 'none';
-				restart();
+				if(gameIsOver){
+					gameOverScreen.style.display = 'block';
+				}else{
+					gameOverScreen.style.display = 'none';
+					restart();
+				}
 			}
 		}
 	}
@@ -1193,9 +1215,27 @@ aa.add( 'die', 1,
     //  intro
     //------------------------------------------------------------------------------------------------------------------
 
+	var introTweens;
 	function updateIntro(){
+		var whiteKing = checkBoard[8][3].piece;
+		var blackKing = player;
+
 		console.log(introStep);
-		var now = Date.now();
+		var i,j,cell,row;
+		now = Date.now();
+		var init = !introStartTime;
+		if(init){
+			console.log('intro init',introStep,now);
+			introStartTime = now;
+			skipIntroTweens();
+			if(whiteKing){
+				whiteKing.talking = false;
+				whiteKing.talkingStarTime = now;
+			}
+			blackKing.talking = false;
+			blackKing.talkingStarTime = now;
+		}
+
 		if(introStep == -1){
 			shadowCanvas.style.opacity = 0;
 			skyCanvas.style.opacity = 0;
@@ -1207,24 +1247,76 @@ aa.add( 'die', 1,
 		}else if(introStep === 0){
 			//Waiting for space
 		}else if(introStep == 1){
-			//showDialog(true,'Surrender Black King, your army is defeated, and your Queen is mine !');
+			if(init){
+				showDialog(true,['Surrender Black King !', 'Your army is defeated, and your Queen is mine !']);
+				whiteKing.talking = true;
+			}
 		}else if(introStep == 2){
-            //bring pawns in
+			if(init){
+				hideDialog();
+				//bring knights in
+				for(j=0; j<NUM_CELLS; j++){
+					cell = checkBoard[0][j];
+					addIntroTween(cell.piece,{row:2, col:j+(j%2===0 ? 1:-1)}, j*0.1, 0.5);
+				}
+			}
         }else if(introStep == 3){
-            //showDialog(true,'You are surrounded. Admit defeat now and I shall be merciful.');
+            if(init){
+                showDialog(true,['You thought I\'d only bring two knights to battle ?','You are surrounded,','admit defeat now and I shall be merciful.']);
+                whiteKing.talking = true;
+            }
         }else if(introStep == 4){
+            if(init){
+                showDialog(false,['Never !']);
+                blackKing.talking = true;
+            }
             //sword ?
         }else if(introStep == 5){
-            //showDialog(true, 'All units, capture him, and I want him alive !');
+            if(init){
+                showDialog(true, ['As you wish...','I am taking the prisoner back to the castle.','Knights, capture him, I want him alive.']);
+                whiteKing.talking = true;
+            }
         }else if(introStep == 6){
-            //units move
+            if(init){
+                hideDialog();
+                //white king moves out
+                for(j=2; j<=5; j++){
+                    cell = checkBoard[8][j];
+                    if(cell){
+                        addIntroTween(cell.piece, {row:9}, 0, 0.5);
+                        addIntroTween(cell.piece, {row:10}, 1, 0.5);
+                    }
+                }
+                addIntroTween(checkBoard[7][3].piece, {row:8, col:1}, 0.5, 0.5);
+                addIntroTween(checkBoard[7][3].piece, {row:10, col:2}, 1.5, 0.5);
+                addIntroTween(checkBoard[7][4].piece, {row:8, col:6}, 0.5, 0.5);
+                addIntroTween(checkBoard[7][4].piece, {row:10, col:5}, 1.5, 0.5);
+            }
         }else if(introStep == 7){
-            //showDialog(false, 'You won\'t get away with this !');
+            if(init){
+                showDialog(false, ['Wait for me my Queen, I will save you !']);
+                blackKing.talking = true;
+
+                //remove intro pieces
+                for(i=1; i<2*NUM_CELLS;i++){
+                    row = checkBoard[i];
+                    if(row){
+                        for(j=0; j<NUM_CELLS; j++){
+                            cell = row[j];
+                            if(cell && cell.piece && cell.piece.intro){
+                                removeSvgShape(cell.piece);
+                                row[j] = {};
+                            }
+                        }
+                    }
+                }
+            }
         }else if(introStep == 8){
+            if(init){
+                hideDialog();
+                pressSpaceText.style.display = 'none';
+            }
 			//perspective switch
-			if(!introStartTime){
-				introStartTime = now;
-			}
 			introProgress = (now - introStartTime) / (4 * 1000);
 			if(introProgress > 1){
                 introStep = 9;
@@ -1245,13 +1337,79 @@ aa.add( 'die', 1,
             }
         }
 
+		if(init){
+			if(!introTweens.length){
+				pressSpaceText.style.opacity = 1;
+			}else{
+				pressSpaceText.style.opacity = 0;
+				var hasText = introTweens[0].e == dialogBox;
+				var lastTween = introTweens[introTweens.length-1];
+				var delay = lastTween.du+lastTween.de;
+				if(hasText){
+					delay += 2;
+				}else{
+					delay += 0.5;
+				}
+				addIntroTween(pressSpaceText.style, {opacity:1}, delay, 0.1);
+			}
+		}
+		updateIntroTweens();
+
         if(introStep == 9){
            intro = false;
            perspectiveProgress = 1;
            introScreen.style.display = 'none';
            shadowCanvas.style.opacity = 1;
            skyCanvas.style.opacity = 1;
+           pressSpaceText.style.display = 'none';
+           hideDialog();
+           player.talking = false;
         }
+
+        lastTime = now;
+	}
+
+	function addIntroTween(element, props, delay, duration){
+		introTweens.push({e:element, to:props, de:delay || 0, du:duration});
+	}
+
+	function skipIntroTweens(){
+		if(introTweens){
+			for(var i=0; i<introTweens.length; i++){
+				var t = introTweens[i];
+				for(var key in t.to){
+					t.e[key] = t.to[key];
+				}
+			}
+		}
+		introTweens = [];
+	}
+
+	function updateIntroTweens(){
+		var time = (now - introStartTime) * MS_TO_S;
+		var key;
+		for(var i=0; i<introTweens.length; i++){
+			var tween = introTweens[i];
+			if(time <= tween.de){
+				//Not started
+			}else if(time >= tween.de +tween.du){
+				//Done
+			}else{
+				if(!tween.from){
+					tween.from = {};
+					for(key in tween.to){
+						tween.from[key] = tween.e[key];
+					}
+				}
+				var p = (time - tween.de)/tween.du;
+				//Ease
+				p = Math.sin(p*PI/2);
+				for(key in tween.to){
+					tween.e[key] = tween.from[key] * (1-p) + tween.to[key] * p;
+				}
+			}
+		}
+		dialogBox.setAttributeNS(null,'y',dialogBox._y);
 	}
 
 
@@ -1272,7 +1430,7 @@ aa.add( 'die', 1,
 	function render(){
 		//console.log('render',perspectiveProgress,intro);
 		// SVG ------------------------------------------------------------------------------------------------------
-		 
+
 		//update pieces
 		var pieceAfterPlayer;
 		var row;
@@ -1282,13 +1440,17 @@ aa.add( 'die', 1,
 				for(var colIndex=0; colIndex<NUM_CELLS; colIndex++){
 					if(row[colIndex] && row[colIndex].piece){
 						var piece = row[colIndex].piece;
-						//if(piece != player){
-							computeCellPos(piece.row, piece.col, piece);
-							updatePieceStyle(piece);
-							if(piece.y > player.y && (!pieceAfterPlayer || pieceAfterPlayer.y > piece.y)){
-								pieceAfterPlayer = piece;
-							}
-						//}
+						computeCellPos(piece.row, piece.col, piece);
+
+						if(piece.talking){
+							var bounce = -Math.abs(Math.sin( (now-piece.talkingStarTime) * PI / 800 )) * CELL_SIZE * 0.2;
+							piece.y += bounce;
+						}
+
+						updatePieceStyle(piece);
+						if(piece.y > player.y && (!pieceAfterPlayer || pieceAfterPlayer.y > piece.y)){
+							pieceAfterPlayer = piece;
+						}
 					}
 				}
 			}
@@ -1434,7 +1596,7 @@ aa.add( 'die', 1,
 					}
 				}
 				bgCtx.fill();
-				
+
 				row = checkBoard[i+progressIndex];
 				if(row && row[j]){
 					var cell = row[j];
@@ -1738,15 +1900,17 @@ aa.add( 'die', 1,
 		var defs = document.createElementNS (xmlns, "defs");
 		svgElem.appendChild (defs);
 
-		makeIntroScreen();
 		//make pieces layer
 		svgPiecesLayer = document.createElementNS (xmlns, "g");
 		svgElem.appendChild (svgPiecesLayer);
 
-		makeFilter(ENEMY_FILTER);
+		makeIntroScreen();
+        makeFilter(ENEMY_FILTER);
 		makeCheckTextDef(CHECK_TEXT,'CHECK');
 		makeGameOverScreen();
+		makeDialogBox();
 		makePressSpaceText();
+		makeWinScreen();
 
 
 		//For convenience, shape defs are given in a [10,10] rect, transformed to [CELL_SIZE,CELL_SIZE] in actual SVG
@@ -1761,7 +1925,9 @@ aa.add( 'die', 1,
 		);
 		svgStyle(
 			makeDef(ENEMY_KING,[
-				makePath(['M',[5,1],'L',[5,-2],'M',[4,-1],'L',[6,-1]], {'stroke-width':3}),
+				makePath(['M',[4.6,1.4],'L',[5.4,1.4],'L',[5.4,-0.6],'L',[6.4,-0.6],'L',[6.4,-1.4],'L',[5.4,-1.4],'L',[5.4,-2.4],'L',[4.6,-2.4],
+					'L',[4.6,-1.4],'L',[3.6,-1.4],'L',[3.6,-0.6],'L',[4.6,-0.6],'L',[4.6,1.4]]
+				),
 				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[6,3],'L',[7,1],'Q',[5,0],[3,1],'L',[4,3],'L',[2,8]])
 			]), PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
 		);
@@ -1795,10 +1961,18 @@ aa.add( 'die', 1,
 		//HERO_KING
 		svgStyle(
 			makeDef(HERO_KING,[
-				makePath(['M',[5,1],'L',[5,-2],'M',[4,-1],'L',[6,-1]], {'stroke-width':3}),
-				makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[6,3],'L',[7,1],'Q',[5,0],[3,1],'L',[4,3],'L',[2,8]])
+				makePath(['M',[4.6,1.4],'L',[5.4,1.4],'L',[5.4,-0.6],'L',[6.4,-0.6],'L',[6.4,-1.4],'L',[5.4,-1.4],'L',[5.4,-2.4],'L',[4.6,-2.4],
+                    'L',[4.6,-1.4],'L',[3.6,-1.4],'L',[3.6,-0.6],'L',[4.6,-0.6],'L',[4.6,1.4]]
+                ),
+                makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[6,3],'L',[7,1],'Q',[5,0],[3,1],'L',[4,3],'L',[2,8]])
 			]), '#002', '#333', 0
 		);
+		svgStyle(
+            makeDef(QUEEN,[
+                makeCircle(5,0.4,0.6),
+                makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[6,3],'L',[7.5,1],'L',[5.8,1.5],'L',[5,0.8],'L',[4.2,1.5],'L',[2.5,1],'L',[4,3],'L',[2,8] ])
+            ]), '#002', '#333', 0
+        );
 
 		OX = 2.5;
 		OY = 50;
@@ -1829,8 +2003,14 @@ aa.add( 'die', 1,
 			if(!skipShadow) def.appendChild(makeShadow());
 			for(var i=0; i<shapes.length; i++){
 				var shape = shapes[i];
-				shape.setAttributeNS(null,'x',-CELL_SIZE/2);
-				shape.setAttributeNS(null,'y',-CELL_SIZE);
+				if(shape.getAttributeNS(null,'x')){
+					//Rect
+					//shape.setAttributeNS(null,'x',parseInt(shape.getAttributeNS(null,'x'))-CELL_SIZE/2);
+                    //shape.setAttributeNS(null,'y',parseInt(shape.getAttributeNS(null,'y'))-CELL_SIZE);
+				}else{
+					shape.setAttributeNS(null,'x',-CELL_SIZE/2);
+					shape.setAttributeNS(null,'y',-CELL_SIZE);
+				}
 				def.appendChild(shape);
 			}
 
@@ -1869,10 +2049,10 @@ aa.add( 'die', 1,
 		function makeRect(x, y, w, h){
             var rect = document.createElementNS (xmlns, "rect");
             svgAttrs(rect, {
-                x: svgFloat(cx - OX),
-                y: svgFloat(cy - OY),
-                w: svgFloat(w),
-                h: svgFloat(h)
+                x: svgFloat(x - OX),
+                y: svgFloat(y - OY),
+                width: svgFloat(w),
+                height: svgFloat(h)
             });
             return rect;
         }
@@ -2024,6 +2204,105 @@ aa.add( 'die', 1,
             pressSpaceText.innerHTML = 'Press <tspan style="fill:orange;">SPACE</tspan>';
             svgElem.appendChild(pressSpaceText);
         }
+
+        function makeDialogBox(){
+
+            var width = SIZE - 2* DIALOG_MARGIN;
+            var height = 0.3 * SIZE - 2* DIALOG_MARGIN;
+            dialogCloseY = SIZE+HORIZON_Y;
+            dialogOpenY = (HORIZON_Y+SIZE-height-DIALOG_MARGIN);
+			dialogBox = document.createElementNS(xmlns, "svg");
+			dialogBox._y = dialogCloseY; //used for tweening
+			svgAttrs(dialogBox, {x:DIALOG_MARGIN, y:dialogCloseY,width:width,height:height});
+            svgElem.appendChild(dialogBox);
+
+            var rect = document.createElementNS(xmlns,'rect');
+            svgAttrs(rect, {width:'100%',height:'100%',fill:'rgba(0,0,0,0.8)',stroke:'#fff','stroke-width':2});
+            dialogBox.appendChild(rect);
+
+            dialogSpeakerText = document.createElementNS (xmlns, 'text');
+            svgAttrs(dialogSpeakerText,{
+                'x': 10,
+                'y': 20,
+                'font-size':'18px',
+                'fill': '#fff',
+                'text-anchor': 'left',
+                'font-family':'Impact'
+            });
+            dialogSpeakerText.innerHTML = '';
+            dialogBox.appendChild(dialogSpeakerText);
+
+            dialogText = document.createElementNS (xmlns, 'text');
+			svgAttrs(dialogText,{
+			 'x': 10,
+			 'y': 40,
+			 'font-size':'16px',
+			 'fill': '#fff',
+			 'text-anchor': 'left',
+			 'font-family':'sans-serif'
+			});
+			dialogText.innerHTML = '';
+			dialogBox.appendChild(dialogText);
+        }
+
+        function makeWinScreen(){
+            winScreen = document.createElementNS(xmlns, "g");
+            winScreen.style.display = 'none';
+            svgElem.appendChild(winScreen);
+
+            var rect = document.createElementNS(xmlns,'rect');
+            svgAttrs(rect, {x:0, y:0, width:'100%',height:'100%',fill:'rgba(0,0,0,0.5)'});
+            winScreen.appendChild(rect);
+
+            var text = document.createElementNS (xmlns, 'text');
+            svgAttrs(text,{
+                'x': '50%',
+                'y': '50%',
+                'font-size':'48px',
+                'fill': '#5f7',
+                'stroke': 'black',
+                'stroke-width':'2px',
+                'text-anchor': 'middle',
+                'font-family':'Impact'
+            });
+            text.innerHTML = 'YOU WIN !';
+            winScreen.appendChild(text);
+
+            text = document.createElementNS (xmlns, 'text');
+            svgAttrs(text,{
+                'x': '50%',
+                'y': '60%',
+                'font-size':'22px',
+                'fill': 'white',
+                'stroke': 'black',
+                'stroke-width':'1px',
+                'text-anchor': 'middle',
+                'font-family':'Impact'
+            });
+            text.innerHTML = 'Alas, your Queen is in another castle...';
+            winScreen.appendChild(text);
+        }
+	}
+
+	var dialogOpenY;
+	var dialogCloseY;
+	function showDialog(whiteKing,texts){
+		if(whiteKing){
+			dialogSpeakerText.innerHTML = 'White King :';
+		}else{
+			dialogSpeakerText.innerHTML = 'Black King :';
+		}
+		var txt = '';
+		for(var i=0; i<texts.length; i++){
+			txt += '<tspan x="10" '+(i===0 ? '' : 'dy="1.2em"')+'>'+texts[i]+'</tspan>';
+		}
+		dialogText.innerHTML = txt;
+
+		addIntroTween(dialogBox,{_y:dialogOpenY},0,0.5);
+	}
+
+	function hideDialog(){
+		addIntroTween(dialogBox,{_y:dialogCloseY},0,0.5);
 	}
 
 	function svgAttrs(el, attrs){
@@ -2207,7 +2486,7 @@ aa.add( 'die', 1,
 		onmouse(false,e);
 	};
 	document.onmousemove = function(e){
-		mouse.x = e.clientX;
+		mouse.x = e.clientX - root.offsetLeft;
 		mouse.y = e.clientY;
 	};
 
