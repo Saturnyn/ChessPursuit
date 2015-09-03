@@ -60,7 +60,6 @@ window.onload = function(){
 	var gameOverScreen = null;
 	var gameIsOver = false;
 	var autoMove = false;
-    var homeScreen = false;
     var progress = 0;	//expressed as a number of rows
     var progressPerSec = 1; //1
     var checkBoard = null;
@@ -130,6 +129,9 @@ window.onload = function(){
 		initSkyCanvas();
 		initSvg();
 		initShadowCanvas();
+
+		//intro = false;
+		//initCheckBoard(2);
 
 		initCheckBoard(0);
 
@@ -292,25 +294,26 @@ window.onload = function(){
             '',
             '',
             '       p',
-            '   rp pr',
+            '    rp r',
             '',
             '',
-            'p',
-            'r  p   p',
+            'pp',
+            'r   p  p',
             'p'
         );
 
 		// rook labyrinth
 		block(
-			'',
-			' r     p',
-			'      pp',
-			'   p   r',
-			'p   p',
-			'r p p',
-			'r   p',
-			'ppppp  p'
-		);
+            '',
+            'p     r',
+            'r     p',
+            'r    p',
+            '',
+            '   p',
+            '   p',
+            'p  ppppp',
+            ''
+        );
 
 		//CHECK POINT 2
         checkPoint();
@@ -318,6 +321,7 @@ window.onload = function(){
 		//10 first bishop
 		block(
 			{showThreat:'b'},
+			'',
 			'',
 			'',
 			'',
@@ -832,32 +836,30 @@ window.onload = function(){
 
 		//lives=1;
 		if(gameIsOver){
-			if(keys.space === 0){
+			if(keys.space === 0 || mouse.click){
 				setGameIsOver(false);
 				keys.space = -1;
 			}
 		}else{
-			if(homeScreen){
-				renderHomeScreen();
+			if(!intro){
+				processInput();
+				update();
 			}else{
-				if(!intro){
-					processInput();
-					update();
-				}else{
-					if(introStep >= 0){
-						if(keys.space === 0){
-							keys.space = -1;
-                            introStep ++;
-                            introStartTime = null;
-                        }
-					}
-					updateIntro();
+				if(introStep >= 0){
+					if(keys.space === 0 || mouse.click){
+						keys.space = -1;
+                        introStep ++;
+                        introStartTime = null;
+                    }
 				}
-				//var t = now;
-				render();
-				//console.log('renderTime', now-t);
+				updateIntro();
 			}
+			//var t = now;
+			render();
+			//console.log('renderTime', now-t);
+
 		}
+		mouse.click = false;
 
 		if(window.ste) ste();
 
@@ -900,7 +902,7 @@ window.onload = function(){
         if(topRowDisplayed <= 0){
             return;
         }
-        if(player.anim || intro){
+        if(player.invalid || intro){
             //can't during animation
             return;
         }
@@ -971,30 +973,7 @@ window.onload = function(){
 
         // no keyboard input => check mouse
         if(!player.anim && mouse.x > 0 && mouse.x<SIZE && mouse.y > HORIZON_Y && mouse.y < SIZE + HORIZON_Y ){
-            /*
-            dx = 0;
-            dy = 0;
-            var angle = Math.atan2(mouse.y-player.y,mouse.x-player.x)*180/PI;
-            var part = Math.floor(angle / 22.5); //[-8,7]
-            if(part <= -6 || part >= 5){
-                dx = -1;
-            }else if(part >= -3 && part <=2){
-                dx = 1;
-            }
-            if(part <= -2 && part >= -7){
-                dy = 1;
-            }else if(part >= 1 && part <=6){
-                dy = -1;
-            }
 
-            mouseRow = player.row + dy;
-            mouseCol = player.col + dx;
-            console.log('mouse part',part,'dx',dx,'dy',dy, Math.round(angle)+'deg');
-            if(mouse.left){
-                mouse.left = false;
-                movePlayer(mouseRow, mouseCol);
-            }
-            */
             var mouseX = mouse.x/SIZE;
             var mouseY = (mouse.y-HORIZON_Y)/SIZE;
             reverseProject(mouseX, mouseY);
@@ -1014,8 +993,7 @@ window.onload = function(){
             }
             mouseRow = player.row+dy;
             mouseCol = player.col+dx;
-            if(mouse.left && (dx || dy)){
-                mouse.left = false;
+            if(mouse.click && (dx || dy)){
                 movePlayer(mouseRow,mouseCol);
             }
 
@@ -1110,12 +1088,12 @@ window.onload = function(){
 		var whiteKing = checkBoard[8][3].piece;
 		var blackKing = player;
 
-		console.log(introStep);
+		//console.log(introStep);
 		var i,j,cell,row;
 		now = Date.now();
 		var init = !introStartTime;
 		if(init){
-			console.log('intro init',introStep,now);
+			//console.log('intro init',introStep,now);
 			introStartTime = now;
 			skipIntroTweens();
 			if(whiteKing){
@@ -1345,10 +1323,7 @@ window.onload = function(){
 				}
 			}
 		}
-		if(pieceAfterPlayer){
-			//adjust player z-index
-			svgPiecesLayer.insertBefore(player.shape, pieceAfterPlayer.shape);
-		}
+
 
 		//update player anim
 		var playerAnimProgress;
@@ -1440,11 +1415,12 @@ window.onload = function(){
 			removeSvgShape(checkText);
 		}
 
-
+		if(pieceAfterPlayer && pieceAfterPlayer.shape && player.shape && player.shape.nextSibling != pieceAfterPlayer.shape){
+            //adjust player z-index
+            svgPiecesLayer.insertBefore(player.shape, pieceAfterPlayer.shape);
+        }
 
 		// CANVAS ------------------------------------------------------------------------------------------------------
-
-		clearCanvas(bgCtx);
 
 		//clear & fill
 		bgCtx.save();
@@ -1633,6 +1609,7 @@ window.onload = function(){
 		shadowCanvas.style.pointerEvents = 'none';
 		root.appendChild(shadowCanvas);
 	}
+
 	function initSkyCanvas(){
 		var shadowSize = SIZE * 0.02;
     	skyCanvas.width = SIZE;
@@ -1701,38 +1678,39 @@ window.onload = function(){
 		ctx.restore();
 
 		root.appendChild(skyCanvas);
-
-		/*
-		skyCtx.beginPath();
-		skyCtx.lineWidth = 1;
-		skyCtx.strokeStyle = STROKE_COLOR;
-		var randOffset = 4;
-		var y1, y2;
-		for(var i=-randOffset; i<SIZE+randOffset; i+=10){
-			y1 = 1-Math.sin( (i/SIZE)*PI/2);
-			y2 = 1-Math.sin( (i/SIZE)*PI/2);
-			y1 = y1*SIZE + rand()*randOffset;
-			y2 = y2*SIZE +rand()*randOffset;
-            skyCtx.moveTo(0,y1);
-			skyCtx.lineTo(SIZE,y2);
-		}
-		skyCtx.stroke();
-		root.appendChild(skyCanvas);
-		*/
-
-		/*
-		//Top down shadow
-		var grd = skyCtx.createLinearGradient(0,0,0,SIZE/2);
-        grd.addColorStop(0,"rgba(0,0,0,0.6)");
-		grd.addColorStop(0.1,"rgba(0,0,0,0.3)");
-		grd.addColorStop(1,"rgba(0,0,0,0)");
-		*/
-
-
 	}
 
+	function makeCanvas(width, height, id){
+        var canvas = document.createElement("canvas");
+        if(id) canvas.id = id;
+        canvas.width = width;
+        canvas.height = height;
+        return canvas;
+    }
+
+    function getContext(canvas){
+        return canvas.getContext("2d");
+    }
+
+    function style(ctx, fill,stroke,lineWidth){
+        if(fill) ctx.fillStyle = fill;
+        if(stroke) ctx.strokeStyle = stroke;
+        if(lineWidth) ctx.lineWidth = lineWidth;
+    }
+
+    // c: color string or canvas/image
+    function fillRect(ctx,x,y,w,h,c){
+        if(c){
+            if(c.width){
+                c = ctx.createPattern(c, 'repeat');
+            }
+            style(ctx,c);
+        }
+        ctx.fillRect(x,y,w,h);
+    }
+
 	//------------------------------------------------------------------------------------------------------------------
-    //  svg
+    //  SVG
     //------------------------------------------------------------------------------------------------------------------
 
 	var svgMakeUse;
@@ -1913,8 +1891,8 @@ window.onload = function(){
 			def.setAttributeNS (null, 'id', id);
 			svgAttrs(def, { x:'0', y:'0', width:'100%', height:'100%', 'color-interpolation-filters':'sRGB' });
 
-			def.innerHTML = '<feFlood flood-color="rgba(255,0,0,0.3)" result="COLOR"></feFlood>'+
-                            '<feComposite operator="atop" in="COLOR" in2="SourceGraphic"></feComposite>';
+			svgInnerHtml(def,'<feFlood flood-color="rgba(255,0,0,0.3)" result="COLOR"></feFlood>'+
+                             '<feComposite operator="atop" in="COLOR" in2="SourceGraphic"></feComposite>');
 
 			defs.appendChild (def);
 			return def;
@@ -2014,7 +1992,7 @@ window.onload = function(){
             	'stroke-width':'1',
             	'font-family':'Impact'
             });
-            def.innerHTML = text;
+            svgInnerHtml(def, text);
             defs.appendChild(def);
 		}
 
@@ -2038,7 +2016,7 @@ window.onload = function(){
 				'text-anchor': 'middle',
 				'font-family':'Impact'
 			});
-			text.innerHTML = 'CHECKMATE !';
+			svgInnerHtml(text, 'CHECKMATE !');
 			gameOverScreen.appendChild(text);
 
 			text = document.createElementNS (xmlns, 'text');
@@ -2052,7 +2030,10 @@ window.onload = function(){
                 'text-anchor': 'middle',
                 'font-family':'Impact'
             });
-            text.innerHTML = 'Press <tspan style="fill:orange;">SPACE</tspan> to restart at last checkpoint';
+            svgInnerHtml(text,
+                '<tspan x="50%">Press <tspan style="fill:orange;">SPACE</tspan> or <tspan style="fill:orange;">CLICK</tspan></tspan>' +
+                '<tspan x="50%" dy="1.5em">to restart from the last checkpoint.</tspan>'
+            );
             gameOverScreen.appendChild(text);
 		}
 
@@ -2075,7 +2056,7 @@ window.onload = function(){
                 'text-anchor': 'middle',
                 'font-family':'Impact'
             });
-            text.innerHTML = 'CHESS<tspan style="font-style:italic;">PURSUIT</tspan>';
+            svgInnerHtml(text, 'CHESS<tspan style="font-style:italic;">PURSUIT</tspan>');
             introScreen.appendChild(text);
         }
 
@@ -2091,7 +2072,7 @@ window.onload = function(){
                 'text-anchor': 'middle',
                 'font-family':'Impact'
             });
-            pressSpaceText.innerHTML = 'Press <tspan style="fill:orange;">SPACE</tspan>';
+            svgInnerHtml(pressSpaceText, 'Press <tspan style="fill:orange;">SPACE</tspan> or <tspan style="fill:orange;">CLICK</tspan>');
             svgElem.appendChild(pressSpaceText);
         }
 
@@ -2119,7 +2100,6 @@ window.onload = function(){
                 'text-anchor': 'left',
                 'font-family':'Impact'
             });
-            dialogSpeakerText.innerHTML = '';
             dialogBox.appendChild(dialogSpeakerText);
 
             dialogText = document.createElementNS (xmlns, 'text');
@@ -2131,7 +2111,6 @@ window.onload = function(){
 			 'text-anchor': 'left',
 			 'font-family':'sans-serif'
 			});
-			dialogText.innerHTML = '';
 			dialogBox.appendChild(dialogText);
         }
 
@@ -2155,7 +2134,7 @@ window.onload = function(){
                 'text-anchor': 'middle',
                 'font-family':'Impact'
             });
-            text.innerHTML = 'YOU WIN !';
+            svgInnerHtml(text, 'YOU WIN !');
             winScreen.appendChild(text);
 
             text = document.createElementNS (xmlns, 'text');
@@ -2169,7 +2148,7 @@ window.onload = function(){
                 'text-anchor': 'middle',
                 'font-family':'Impact'
             });
-            text.innerHTML = 'Alas, your Queen is in another castle...';
+            svgInnerHtml(text, 'Alas, your Queen is in another castle...');
             winScreen.appendChild(text);
         }
 	}
@@ -2178,21 +2157,34 @@ window.onload = function(){
 	var dialogCloseY;
 	function showDialog(whiteKing,texts){
 		if(whiteKing){
-			dialogSpeakerText.innerHTML = 'White King :';
+			 svgInnerHtml(dialogSpeakerText, 'White King :');
 		}else{
-			dialogSpeakerText.innerHTML = 'Black King :';
+			 svgInnerHtml(dialogSpeakerText, 'Black King :');
 		}
 		var txt = '';
 		for(var i=0; i<texts.length; i++){
 			txt += '<tspan x="10" '+(i===0 ? '' : 'dy="1.2em"')+'>'+texts[i]+'</tspan>';
 		}
-		dialogText.innerHTML = txt;
+		svgInnerHtml(dialogText, txt);
 
 		addIntroTween(dialogBox,{_y:dialogOpenY},0,0.5);
 	}
 
 	function hideDialog(){
 		addIntroTween(dialogBox,{_y:dialogCloseY},0,0.5);
+	}
+
+	var svgInnerHtmlElement = document.createElement('div');
+	function svgInnerHtml(svg, html){
+		while (svg.firstChild) {
+	        svg.removeChild(svg.firstChild);
+	    }
+		var svgText='<svg>'+html+'</svg>';
+        svgInnerHtmlElement.innerHTML = svgText;
+        var nodes = Array.prototype.slice.call(svgInnerHtmlElement.childNodes[0].childNodes);
+        nodes.forEach(function(el){
+            svg.appendChild(el);
+        });
 	}
 
 	function svgAttrs(el, attrs){
@@ -2219,65 +2211,6 @@ window.onload = function(){
 		return svgElem;
 	}
 
-	//------------------------------------------------------------------------------------------------------------------
-	// canvas helper functions
-	//------------------------------------------------------------------------------------------------------------------
-
-	function makeCanvas(width, height, id){
-		var canvas = document.createElement("canvas");
-		if(id) canvas.id = id;
-		canvas.width = width;
-		canvas.height = height;
-		return canvas;
-	}
-
-	function getContext(canvas){
-		return canvas.getContext("2d");
-	}
-
-	function style(ctx, fill,stroke,lineWidth){
-		if(fill) ctx.fillStyle = fill;
-		if(stroke) ctx.strokeStyle = stroke;
-		if(lineWidth) ctx.lineWidth = lineWidth;
-	}
-
-	// c: color string or canvas/image
-	function fillRect(ctx,x,y,w,h,c){
-		if(c){
-			if(c.width){
-				c = ctx.createPattern(c, 'repeat');
-			}
-			style(ctx,c);
-		}
-		ctx.fillRect(x,y,w,h);
-	}
-
-	function drawImage(ctx,src,x,y){
-		ctx.drawImage(src,x,y);
-	}
-
-	function drawCircle(ctx,x,y,radius,fill,stroke){
-		ctx.beginPath();
-		ctx.arc(x, y, radius, 0, 2 * PI, false);
-		if(fill){
-			ctx.fill();
-		}
-		if(stroke){
-			ctx.stroke();
-		}
-	}
-
-	function drawLine(ctx,x,y,x2,y2){
-		ctx.beginPath();
-		ctx.moveTo(x,y);
-		ctx.lineTo(x2,y2);
-		ctx.stroke();
-	}
-
-	function clearCanvas(ctx){
-		ctx.clearRect(0,0,screenWidth,screenHeight);
-	}
-
 	//-----------------------------------------------------------
 	// Input
 	//-----------------------------------------------------------
@@ -2296,7 +2229,7 @@ window.onload = function(){
 		68: "right",//d
 		32: "space",
 		27: "esc",
-		13: "Enter"
+		13: "enter"
 	};
 	// keyName => isDown bool
 	var keyBoolMap = {};
@@ -2318,12 +2251,12 @@ window.onload = function(){
 				}
 				if(isDown){
 					if(keys[keyName]<1){
-						console.log('keyDown',keyName);
+						//console.log('keyDown',keyName);
 						keys[keyName] = 1;
 					}
 				}else{
 					if(keys[keyName] > 0){
-						console.log('keyUp',keyName);
+						//console.log('keyUp',keyName);
 						keys[keyName] = 0;
 					}
 				}
@@ -2331,49 +2264,28 @@ window.onload = function(){
 		}
 	}
 	document.onkeyup = function(e){
+		//DEBUG/CHEAT: pause
+	    if(!intro && keyBoolMap.enter){
+	        raf = !raf;
+	        console.log('debug toggle anim: ',raf);
+	        if(raf){
+	            lastTime = Date.now();
+	            tic();
+	        }
+	    }
+
 		onkey(false, e);
-
-		if(e.keyCode==27) toggleHome();
-		if(e.keyCode==32 && homeScreen) toggleHome();
-
 	};
 	document.onkeydown = function(e){
 		onkey(true, e);
-		//DEBUG
-		if(keyBoolMap.esc){
-			raf = !raf;
-			console.log('debug toggle anim: ',raf);
-			if(raf){
-				lastTime = Date.now();
-				tic();
-			}
-		}
 	};
 
-	function onmouse(isDown,e){
-		var rightClick;
-		var middleClick;
-		if ("which" in e){ // Gecko (Firefox), WebKit (Safari/Chrome) & Opera
-			rightClick = e.which == 3;
-			middleClick = e.which == 2;
-		}else if ("button" in e){  // IE, Opera
-			rightClick = e.button == 2;
-			middleClick = e.button == 1;
-		}
-		if(rightClick){
-			mouse.right = isDown;
-		}else if(middleClick){
-			mouse.middle = isDown;
-		}else{
-			mouse.left = isDown;
-		}
+	function onmouse(isClick,e){
+		mouse.click = isClick;
 		document.onmousemove(e);
 	}
-	document.onmousedown = function(e){
+	document.onclick = function(e){
 		onmouse(true,e);
-	};
-	document.onmouseup = function(e){
-		onmouse(false,e);
 	};
 	document.onmousemove = function(e){
 		mouse.x = e.clientX - root.offsetLeft;
