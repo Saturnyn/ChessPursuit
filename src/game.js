@@ -335,6 +335,7 @@ window.onload = function(){
 		//11 bishop field
 		block(
 			'',
+			' p p p',
 			'b b b b',
 			'',
 			'',
@@ -2284,7 +2285,7 @@ window.onload = function(){
 		mouse.click = isClick;
 		document.onmousemove(e);
 	}
-	document.onclick = function(e){
+	document.onmousedown = function(e){
 		onmouse(true,e);
 	};
 	document.onmousemove = function(e){
