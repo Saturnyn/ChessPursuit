@@ -158,6 +158,7 @@ aa.add( 'checkmate', 1,
 	var playerInvalidDuration = 0.5;
 
 	var pressSpaceText = null;
+	var pauseText = null;
 	var introScreen = null;
     var intro = true;
 	var introStartTime;
@@ -215,8 +216,6 @@ aa.add( 'checkmate', 1,
 		initShadowCanvas();
 
 		//intro = false;
-		//initCheckBoard(2);
-
 		initCheckBoard(0);
 
         tic();
@@ -1867,6 +1866,7 @@ aa.add( 'checkmate', 1,
 		makeGameOverScreen();
 		makeDialogBox();
 		makePressSpaceText();
+		makePauseText();
 		makeWinScreen();
 
 
@@ -1910,10 +1910,20 @@ aa.add( 'checkmate', 1,
                 makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[8.5,6],'L',[7,7],'L',[7,5],'L',[6,6],'L',[5,4.5],'L',[4,6],'L',[3,5],'L',[3,7],'L',[1.5,6],'L',[2,8]])
             ]),  PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
         );
+
+        function makePike(x,y){
+            return makePath(['M',[x,y],'L',[x+1,y],'L',[x+0.5,y-3],'L',[x,y]]);
+        }
         svgStyle(
             makeDef(LAND_MINE,[
-                makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[8.5,6],'L',[7,7],'L',[7,5],'L',[6,6],'L',[5,4.5],'L',[4,6],'L',[3,5],'L',[3,7],'L',[1.5,6],'L',[2,8]])
-            ]),  PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
+                //makePath(['M',[2,8],'Q',[5,10],[8,8],'L',[8.5,6],'L',[7,7],'L',[7,5],'L',[6,6],'L',[5,4.5],'L',[4,6],'L',[3,5],'L',[3,7],'L',[1.5,6],'L',[2,8]])
+                makePike(2,9.5),
+                makePike(5,9),
+                makePike(8,10),
+                makePike(7,8),
+                makePike(4,7.5),
+                makePike(1,8.5)
+            ],true),  PIECE_FILL_COLOR, PIECE_STROKE_COLOR, 0
         );
 		//HERO_KING
 		svgStyle(
@@ -2165,6 +2175,23 @@ aa.add( 'checkmate', 1,
             svgElem.appendChild(pressSpaceText);
         }
 
+        function makePauseText(){
+            pauseText = document.createElementNS (xmlns, 'text');
+            svgAttrs(pauseText,{
+                'x': '50%',
+                'y': '50%',
+                'font-size':'32px',
+                'fill': 'orange',
+                'stroke': 'black',
+                'stroke-width':'1px',
+                'text-anchor': 'middle',
+                'font-family':'Impact'
+            });
+            svgInnerHtml(pauseText, 'PAUSED');
+            pauseText.style.display = 'none';
+            svgElem.appendChild(pauseText);
+        }
+
         function makeDialogBox(){
 
             var width = SIZE - 2* DIALOG_MARGIN;
@@ -2354,8 +2381,9 @@ aa.add( 'checkmate', 1,
 	}
 	document.onkeyup = function(e){
 		//DEBUG/CHEAT: pause
-	    if(!intro && keyBoolMap.enter){
+	    if(!intro && keyBoolMap.enter && !gameIsOver){
 	        raf = !raf;
+	        pauseText.style.display = raf ? 'none' : 'block';
 	        console.log('debug toggle anim: ',raf);
 	        if(raf){
 	            lastTime = Date.now();
