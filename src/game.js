@@ -642,6 +642,7 @@ window.onload = function(){
 				//can cell be taken ?
 				var threateningCell = getThreateningCell(row,col);
 				if(threateningCell){
+					aa.play('check');
 					//invalid position
 					player.invalid = true;
 	                player.invalidCol = col;
@@ -651,11 +652,15 @@ window.onload = function(){
 					row = oldRow;
 					checkCount++;
 				}else{
+
 					player.invalid = false;
 					if(cell.piece){
 						//take the piece
 						destroyPiece(cell.piece);
 						killCount++;
+						aa.play('capture');
+					}else{
+						aa.play('move');
 					}
 					//move piece on check board
 					oldCell.piece = null;
@@ -835,7 +840,6 @@ window.onload = function(){
 
 		if(window.stb) stb(); // Stats plugin for debug
 
-		//lives=1;
 		if(gameIsOver){
 			if(keys.space === 0 || mouse.click){
 				setGameIsOver(false);
@@ -1029,7 +1033,7 @@ window.onload = function(){
 			}else{
 				setGameIsOver(true);
 			}
-
+			aa.play('checkmate');
 		}
 
 		//update checkboard based on progress
