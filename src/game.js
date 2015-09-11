@@ -454,12 +454,12 @@ window.onload = function(){
         //k,r,b,p,l
         block(
             '',
-            '   r',
-            ' kll',
-            '',
-            '',
-            ' l pl  b',
-            '       l',
+            '  r',
+            '  llk',
+            '     .',
+            '   l ..',
+            '   p  pb',
+            '  . .  l',
             '  p  l',
             '',
             '',
@@ -852,8 +852,7 @@ window.onload = function(){
 				if(introStep >= 0){
 					if(keys.space === 0 || mouse.click){
 						keys.space = -1;
-                        introStep ++;
-                        introStartTime = null;
+                        nextIntroStep();
                     }
 				}
 				updateIntro();
@@ -1166,7 +1165,8 @@ window.onload = function(){
             }
         }else if(introStep == 7){
             if(init){
-                showDialog(false, ['Wait for me my Queen, I will save you !']);
+                var anim = '<animate attributeType="CSS" attributeName="fill" from="red" to="orange" dur="0.5s" repeatCount="indefinite"/>';
+                showDialog(false, ['It looks like our roles are <tspan fill="red" font-family="impact">REVERSED'+anim+'</tspan> my Queen.',"Today, it is my turn to protect you !"]);
                 blackKing.talking = true;
 
                 //remove intro pieces
@@ -1214,15 +1214,14 @@ window.onload = function(){
 				pressSpaceText.style.opacity = 1;
 			}else{
 				pressSpaceText.style.opacity = 0;
-				var hasText = introTweens[0].e == dialogBox;
+				var hasText = introTweens[0].e == dialogBox && introTweens[0].to._y == dialogOpenY;
 				var lastTween = introTweens[introTweens.length-1];
 				var delay = lastTween.du+lastTween.de;
 				if(hasText){
-					delay += 2;
-				}else{
-					delay += 0.5;
+					addIntroTween(pressSpaceText.style, {opacity:1}, delay + 2, 0.1);
+				}else if(introStep > 1 && introStep < 8){
+					addIntroCallback(nextIntroStep, delay);
 				}
-				addIntroTween(pressSpaceText.style, {opacity:1}, delay, 0.1);
 			}
 		}
 		updateIntroTweens();
@@ -1241,16 +1240,27 @@ window.onload = function(){
         lastTime = now;
 	}
 
+	function nextIntroStep(){
+		introStep ++;
+        introStartTime = null;
+	}
+
 	function addIntroTween(element, props, delay, duration){
 		introTweens.push({e:element, to:props, de:delay || 0, du:duration});
 	}
+
+	function addIntroCallback(callback, duration){
+        introTweens.push({cb:callback, de:0, du:duration});
+    }
 
 	function skipIntroTweens(){
 		if(introTweens){
 			for(var i=0; i<introTweens.length; i++){
 				var t = introTweens[i];
-				for(var key in t.to){
-					t.e[key] = t.to[key];
+				if(t.e){
+					for(var key in t.to){
+						t.e[key] = t.to[key];
+					}
 				}
 			}
 		}
@@ -1266,18 +1276,24 @@ window.onload = function(){
 				//Not started
 			}else if(time >= tween.de +tween.du){
 				//Done
-			}else{
-				if(!tween.from){
-					tween.from = {};
-					for(key in tween.to){
-						tween.from[key] = tween.e[key];
-					}
+				if(tween.cb){
+					tween.cb();
+					tween.cb = null;
 				}
-				var p = (time - tween.de)/tween.du;
-				//Ease
-				p = Math.sin(p*PI/2);
-				for(key in tween.to){
-					tween.e[key] = tween.from[key] * (1-p) + tween.to[key] * p;
+			}else{
+				if(tween.e){
+					if(!tween.from){
+						tween.from = {};
+						for(key in tween.to){
+							tween.from[key] = tween.e[key];
+						}
+					}
+					var p = (time - tween.de)/tween.du;
+					//Ease
+					p = Math.sin(p*PI/2);
+					for(key in tween.to){
+						tween.e[key] = tween.from[key] * (1-p) + tween.to[key] * p;
+					}
 				}
 			}
 		}
