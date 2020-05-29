@@ -2293,12 +2293,12 @@ window.onload = function(){
 		68: "right",//d
 		32: "space",
 		27: "esc",
-		13: "enter"
+		13: "enter",
 		
-		103: "upleft" // Num7
-		105: "upright" // Num9
-		97: "downleft" // Num1
-		99: "downright" // Num3
+		103: "upleft", // Num7
+		105: "upright", // Num9
+		97: "downleft", // Num1
+		99: "downright", // Num3
 	};
 	// keyName => isDown bool
 	var keyBoolMap = {};
