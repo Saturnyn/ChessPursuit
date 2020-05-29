@@ -928,6 +928,22 @@ window.onload = function(){
             if(keys.right == KEY_LATENCY || keys.right === 0){
                 dx = 1;
             }
+	    if(keys.upright == KEY_LATENCY || keys.upright === 0){
+		dx = 1;
+		dy = 1;
+	    }
+	    if(keys.upleft == KEY_LATENCY || keys.upleft === 0){
+		dx = -1;
+		dy = 1;
+	    }
+	    if(keys.downright == KEY_LATENCY || keys.downright === 0){
+		dx = 1;
+		dy = -1;
+	    }
+	    if(keys.downleft == KEY_LATENCY || keys.downleft === 0){
+		dx = -1;
+		dy = -1;
+	    }
 
             if(dx || dy){
                 //look for a combo: another key that was pressed during the latency
@@ -2277,7 +2293,12 @@ window.onload = function(){
 		68: "right",//d
 		32: "space",
 		27: "esc",
-		13: "enter"
+		13: "enter",
+		
+		103: "upleft", // Num7
+		105: "upright", // Num9
+		97: "downleft", // Num1
+		99: "downright", // Num3
 	};
 	// keyName => isDown bool
 	var keyBoolMap = {};
